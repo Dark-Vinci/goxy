@@ -44,14 +44,14 @@ name TEXT NOT NULL
 	}
 	fmt.Println("Created users table")
 
-	for i := 0; i < 100; i++ {
-		name := fmt.Sprintf("Alice %d", i+1)
-		_, err = db.Exec("INSERT INTO users (name) VALUES ($1)", name)
-		if err != nil {
-			log.Fatalf("Failed to insert data: %v", err)
-		}
-		fmt.Println("Inserted user:", name)
+	//for i := 0; i < 100; i++ {
+	name := fmt.Sprintf("Alice-%d", 1)
+	_, err = db.Exec("INSERT INTO users (name) VALUES ($1)", name)
+	if err != nil {
+		log.Fatalf("Failed to insert data: %v", err)
 	}
+	fmt.Println("Inserted user:", name)
+	//}
 
 	// Query the table
 	rows, err := db.Query("SELECT id, name FROM users")
