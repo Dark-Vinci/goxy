@@ -8,7 +8,14 @@ import (
 	"sync"
 )
 
-func (p *Proxy) handleConnection1(clientConn net.Conn, connID uint64) {
+// defer closing client connection
+// peek the type of request it is [SELECT,...]
+// select an appropriate backend server
+// lock to prevent concurrent access to the same backend
+// get the locked connection instance
+// defer unlocking the connection
+// perform other actions with the postgres connection
+func (p *Proxy) handleConnection(clientConn net.Conn, connID uint64) {
 	defer func(clientConn net.Conn) {
 		if err := clientConn.Close(); err != nil {
 			log.Printf("Error closing client connection: %v", err)
@@ -27,20 +34,12 @@ func (p *Proxy) handleConnection1(clientConn net.Conn, connID uint64) {
 
 	query := string(peekBytes)
 
-	//todo: most likely here for upstream
-	//pgAddr := p.selectBackend(query)
-
-	//log.Println("Forwarding query to:", pgAddr)
-
 	// Connect to selected PostgreSQL backend
-	//serverConn, err := net.Dial("tcp", pgAddr)
-	serverConn := **(handleClientQuery(nil, query).Pool)
+	upstream := handleClientQuery(nil, query)
+	upstream.lock.Lock()
+	defer upstream.lock.Unlock()
 
-	defer func(serverConn net.Conn) {
-		if err := serverConn.Close(); err != nil {
-			log.Printf("Error closing PostgreSQL connection: %v", err)
-		}
-	}(serverConn)
+	serverConn := upstream.Conn
 
 	var wg sync.WaitGroup
 	wg.Add(2)

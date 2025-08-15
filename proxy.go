@@ -1,63 +1,79 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"database/sql"
 	"net"
-	"strings"
 	"sync"
-	"sync/atomic"
+	"time"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/zerolog"
 )
 
 // Proxy represents the PostgreSQL proxy
 type Proxy struct {
-	config      *Config
-	connCounter uint64 // Atomic counter for connection IDs
-	mu          sync.Mutex
-	next        int
+	config       *Config
+	connCounter  uint64 // Atomic counter for connection IDs
+	mu           sync.Mutex
+	next         int
+	session      *Session
+	logger       *zerolog.Logger
+	sqliteDB     *sql.DB
+	ctx          context.Context
+	cancel       context.CancelFunc
+	pingInterval time.Duration
 }
 
 // NewProxy creates a new Proxy instance
-func NewProxy(config *Config) *Proxy {
-	return &Proxy{config: config}
-}
+func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
+	session := &Session{}
 
-// Start runs the proxy server
-func (p *Proxy) Start() error {
-	listener, err := net.Listen("tcp", p.config.listenAddr)
+	master, err := net.Dial("tcp", config.master)
 	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %v", p.config.listenAddr, err)
+		logger.Fatal().Err(err).Msgf("Failed to connect to master: %v", err)
+		return nil
 	}
-	defer listener.Close()
 
-	log.Printf("Proxy listening on %s, forwarding to %s", p.config.listenAddr, p.config)
+	session.UpPrimary = &Upstream{
+		Addr:    config.master,
+		Role:    RolePrimary,
+		Healthy: true,
+		Lag:     0,
+		Conn:    master,
+		lock:    sync.Mutex{},
+	}
 
-	for {
-		clientConn, err := listener.Accept()
+	for _, v := range config.slaves {
+		replica, err := net.Dial("tcp", v)
 		if err != nil {
-			log.Printf("Failed to accept connection: %v", err)
+			logger.Fatal().Err(err).Msgf("Failed to connect to replica %v: %v", v, err)
 			continue
 		}
 
-		connID := atomic.AddUint64(&p.connCounter, 1)
-
-		go p.handleConnection1(clientConn, connID)
-	}
-}
-
-// Select backend based on query type
-func (p *Proxy) selectBackend(query string) string {
-	query = strings.TrimSpace(strings.ToUpper(query))
-
-	if strings.HasPrefix(query, "SELECT") && len(p.config.slaves) > 0 {
-		// Round-robin among replicas
-		p.mu.Lock()
-		addr := p.config.slaves[p.next]
-		p.next = (p.next + 1) % len(p.config.slaves)
-		p.mu.Unlock()
-		return addr
+		session.Replicas = append(session.Replicas, &Upstream{
+			Addr:    v,
+			Role:    RoleReplica,
+			Healthy: false,
+			Lag:     0,
+			Conn:    replica,
+			lock:    sync.Mutex{},
+		})
 	}
 
-	// Writes always go to master
-	return p.config.master
+	ctx, cancel := context.WithCancel(context.Background())
+
+	p := &Proxy{
+		config:   config,
+		logger:   &logger,
+		sqliteDB: db,
+		session:  session,
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+
+	// Start pinging for each upstream
+	p.healthCheck()
+
+	return p
 }

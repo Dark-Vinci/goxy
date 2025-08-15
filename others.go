@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"strings"
+	"sync"
 )
 
 type Upstream struct {
@@ -10,11 +11,11 @@ type Upstream struct {
 	Role    UpstreamRole
 	Healthy bool
 	Lag     int
-	Pool    *ConnPool // your pool wrapper over net.Conn
+	Conn    net.Conn // your pool wrapper over net.Conn
+	lock    sync.Mutex
 }
 
 type Session struct {
-	ClientConn   net.Conn
 	UpPrimary    *Upstream
 	Replicas     []*Upstream
 	InTxn        bool

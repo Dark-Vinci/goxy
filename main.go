@@ -1,24 +1,41 @@
 package main
 
 import (
-	"flag"
+	"context"
+	"database/sql"
 	"log"
+	"os"
+
+	"github.com/joho/godotenv"
+	"github.com/rs/zerolog"
 )
 
 func main() {
-	listenAddr := flag.String("listen", "localhost:5433", "Address for proxy to listen on")
-	pgAddr := flag.String("pg", "localhost:5432", "PostgreSQL server address")
-	flag.Parse()
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	appLogger := logger.With().Str("Thesis", "api").Logger()
 
-	config := &Config{
-		listenAddr: *listenAddr,
-		master:     *pgAddr,
-		slaves:     []string{},
+	err := godotenv.Load("../.env")
+	if err != nil {
+		log.Fatalf("Error loading .env file")
 	}
 
-	proxy := NewProxy(config)
-	if err := proxy.Start(); err != nil {
-		log.Fatalf("Proxy failed: %v", err)
+	db, err := sql.Open("sqlite3", "./upstream.db")
+	if err != nil {
+		logger.Fatal().Err(err).Msgf("Failed to open database: %v", err)
+		return
+	}
+
+	defer func(db *sql.DB) {
+		if err := db.Close(); err != nil {
+			logger.Fatal().Err(err).Msgf("Failed to close database: %v", err)
+		}
+	}(db)
+
+	config := NewConfig()
+
+	proxy := NewProxy(config, db, appLogger)
+	if err := proxy.Start(context.Background()); err != nil {
+		logger.Fatal().Err(err).Msgf("Failed to start proxy: %v", err)
 	}
 }
 
