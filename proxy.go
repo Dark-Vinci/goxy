@@ -64,12 +64,13 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p := &Proxy{
-		config:   config,
-		logger:   &logger,
-		sqliteDB: db,
-		session:  session,
-		ctx:      ctx,
-		cancel:   cancel,
+		config:       config,
+		logger:       &logger,
+		sqliteDB:     db,
+		session:      session,
+		ctx:          ctx,
+		cancel:       cancel,
+		pingInterval: time.Duration(config.pingInterval) * time.Millisecond,
 	}
 
 	// Start pinging for each upstream
