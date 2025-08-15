@@ -8,10 +8,14 @@ import (
 
 // Config holds proxy configuration
 type Config struct {
-	listenAddr   string
-	master       string
-	pingInterval int
-	slaves       []string
+	listenAddr    string
+	master        string
+	pingInterval  int
+	slaves        []string
+	HTTPListen    string
+	JWTSecret     string
+	adminUser     string
+	adminPassword string
 }
 
 func NewConfig() *Config {

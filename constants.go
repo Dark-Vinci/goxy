@@ -17,6 +17,15 @@ const (
 	RoleReplica
 )
 
+// UserRole defines user roles for RBAC
+type UserRole string
+
+const (
+	UserRoleAdmin     UserRole = "admin"
+	UserRoleReadWrite UserRole = "read_write"
+	UserRoleReadOnly  UserRole = "read_only"
+)
+
 type ConnPool *net.Conn
 
 var writePrefixes = []string{
