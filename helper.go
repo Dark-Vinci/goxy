@@ -38,7 +38,7 @@ func chooseReplica(replicas []*Upstream) *Upstream {
 	return healthy[idx%uint64(len(healthy))]
 }
 
-func FromClient(clientConn, serverConn net.Conn, connID int64, wg *sync.WaitGroup) {
+func FromClient(clientConn, serverConn net.Conn, connID int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	reader, isStartup := bufio.NewReader(clientConn), true
 
@@ -110,7 +110,7 @@ func FromClient(clientConn, serverConn net.Conn, connID int64, wg *sync.WaitGrou
 	}
 }
 
-func FromDB(serverConn, clientConn net.Conn, connID int64, wg *sync.WaitGroup) {
+func FromDB(serverConn, clientConn net.Conn, connID int, wg *sync.WaitGroup) {
 	reader := bufio.NewReader(serverConn)
 	defer wg.Done()
 

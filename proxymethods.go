@@ -5,6 +5,8 @@ import (
 	"net"
 	"strings"
 	"sync/atomic"
+
+	"github.com/google/uuid"
 )
 
 // Start runs the proxy server
@@ -34,9 +36,15 @@ func (p *Proxy) Start() error {
 			continue
 		}
 
-		connID := atomic.AddUint64(&p.connCounter, 1)
+		request := &Request{
+			connID:    atomic.AddUint64(&p.connCounter, 1),
+			requestId: uuid.New(),
+			role:      "",
+			userID:    uuid.UUID{},
+			conn:      clientConn,
+		}
 
-		go p.handleConnection(clientConn, connID)
+		go p.handleConnection(request)
 	}
 }
 

@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"io"
-	"log"
 	"net"
 	"sync"
 )
@@ -15,26 +14,27 @@ import (
 // get the locked connection instance
 // defer unlocking the connection
 // perform other actions with the postgres connection
-func (p *Proxy) handleConnection(clientConn net.Conn, connID uint64) {
+func (p *Proxy) handleConnection(request *Request) {
 	defer func(clientConn net.Conn) {
 		if err := clientConn.Close(); err != nil {
-			log.Printf("Error closing client connection: %v", err)
+			p.logger.Warn().Err(err).Msgf("Failed to close client connection: %v", err)
 		}
-	}(clientConn)
+	}(request.conn)
 
 	// Wrap client connection in a buffered reader
-	clientReader := bufio.NewReader(clientConn)
+	clientReader := bufio.NewReader(request.conn)
 
 	// Peek the first message to select backend
 	peekBytes, err := clientReader.Peek(16384) // or reasonable peek size
 	if err != nil && err != io.EOF {
-		log.Println("Error peeking client startup message:", err)
+		p.logger.Warn().Err(err).Msgf("Failed to peek client startup message: %v", err)
 		return
 	}
 
 	query := string(peekBytes)
 
 	// Connect to selected PostgreSQL backend
+	// todo; work more on this part
 	upstream := handleClientQuery(nil, query)
 	upstream.lock.Lock()
 	defer upstream.lock.Unlock()
@@ -45,11 +45,12 @@ func (p *Proxy) handleConnection(clientConn net.Conn, connID uint64) {
 	wg.Add(2)
 
 	// Client -> PROXY -> PostgreSQL
-	go FromClient(clientConn, serverConn, int64(connID), &wg)
+	go FromClient(request.conn, serverConn, int(request.connID), &wg)
 
 	// PostgreSQL -> PROXY -> Client
-	go FromDB(serverConn, clientConn, int64(connID), &wg)
+	go FromDB(serverConn, request.conn, int(request.connID), &wg)
 
 	wg.Wait()
-	log.Printf("[Conn %d] Connection closed", connID)
+
+	p.logger.Info().Msgf("[Conn %d] Connection closed", request.connID)
 }
