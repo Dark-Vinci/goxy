@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"io"
 	"net"
 	"sync"
 )
@@ -22,39 +19,51 @@ func (p *Proxy) handleConnection(request *Request) {
 		}
 	}(request.conn)
 
-	fmt.Println("request got here1")
+	// read startup message
+	rawMessage, _ := readStartupMessage(request.conn)
 
-	// Wrap client connection in a buffered reader
-	clientReader := bufio.NewReader(request.conn)
-	fmt.Println("request got here2")
+	//parse the startup message
+	params, protocol := parseTheStartupMessage(rawMessage)
 
-	// Peek the first message to select backend
-	peekBytes, err := clientReader.Peek(8192) // or reasonable peek size
-	if err != nil && err != io.EOF {
-		p.logger.Warn().Err(err).Msgf("Failed to peek client startup message: %v", err)
+	if _, ok := params["token"]; !ok {
+		_ = writeError(request.conn, "42883", "invalid_authorization_specification", "token is missing")
 		return
 	}
 
-	fmt.Println("request got here3")
+	token, _ := params["token"]
 
-	query := string(peekBytes)
+	_, role, err := p.validateJWT(token)
+	if err != nil {
+		_ = writeError(request.conn, "42883", "invalid_authorization_specification", "token is invalid")
+		return
+	}
+
+	// delete/modify token from params
+	delete(params, "token")
+
+	//build startup message
+	newMessage := buildStartupMessage(params, protocol)
 
 	// Connect to selected PostgreSQL backend
-	// todo; work more on this part
-	upstream := handleClientQuery(p.session, query)
+	upstream := p.session.UpPrimary
 	upstream.lock.Lock()
 	defer upstream.lock.Unlock()
 
-	serverConn := upstream.Conn
+	// Send startup message to PostgreSQL
+	_, err = upstream.Conn.Write(newMessage)
+	if err != nil {
+		_ = writeError(request.conn, "", "", "something went wrong")
+		return
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	// Client -> PROXY -> PostgreSQL
-	go FromClient(request.conn, serverConn, int(request.connID), &wg)
+	go FromClient(request.conn, upstream.Conn, int(request.connID), role, &wg)
 
 	// PostgreSQL -> PROXY -> Client
-	go FromDB(serverConn, request.conn, int(request.connID), &wg)
+	go FromDB(upstream.Conn, request.conn, int(request.connID), &wg)
 
 	wg.Wait()
 

@@ -38,9 +38,9 @@ func chooseReplica(replicas []*Upstream) *Upstream {
 	return healthy[idx%uint64(len(healthy))]
 }
 
-func FromClient(clientConn, serverConn net.Conn, connID int, wg *sync.WaitGroup) {
+func (p *Proxy) FromClient(clientConn, serverConn net.Conn, connID int, role UserRole, wg *sync.WaitGroup) {
 	defer wg.Done()
-	reader, isStartup := bufio.NewReader(clientConn), true
+	reader := bufio.NewReader(clientConn)
 
 	for {
 		// Read data from client
@@ -52,23 +52,24 @@ func FromClient(clientConn, serverConn net.Conn, connID int, wg *sync.WaitGroup)
 			}
 			return
 		}
+
 		if n == 0 {
 			continue
 		}
+
 		data = data[:n]
 
-		// Log client data
-		if isStartup && len(data) > 8 && data[4] == 0 && data[5] == 3 {
-			params := parseStartupMessage(data[8:])
-			log.Printf("FROM-CLIENT; [Conn %d] Client Startup: user=%s, database=%s, password=%v", connID, params["user"], params["database"], params)
-			isStartup = false
-		} else if data[0] == 'Q' && n > 5 { // here
+		if data[0] == 'Q' && n > 5 { // here
 			query := string(bytes.Trim(data[5:], "\x00"))
 			log.Printf("FROM-CLIENT; [Conn %d] Client Query: %s", connID, query)
 
 			// Filter queries by type
 			checkAndLogQueryType(int(connID), query)
+			queryType := p.classifyQuery(query)
 
+			if queryType == QueryWrite && role == UserRoleReadOnly {
+				// quit
+			}
 		} else if data[0] == 'P' && n > 5 {
 			idx := bytes.IndexByte(data[5:], 0) + 5
 			if idx < n-1 {

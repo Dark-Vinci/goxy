@@ -51,6 +51,7 @@ func (p *Proxy) validateJWT(tokenString string) (string, UserRole, error) {
 		}
 		return username, UserRole(roleStr), nil
 	}
+
 	return "", "", fmt.Errorf("invalid token claims")
 }
 

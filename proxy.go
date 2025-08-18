@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"net"
+	"regexp"
 	"sync"
 	"time"
 
@@ -13,16 +14,18 @@ import (
 
 // Proxy represents the PostgreSQL proxy
 type Proxy struct {
-	config       *Config
-	connCounter  uint64 // Atomic counter for connection IDs
-	mu           sync.Mutex
-	next         int
-	session      *Session
-	logger       *zerolog.Logger
-	sqliteDB     *sql.DB
-	ctx          context.Context
-	cancel       context.CancelFunc
-	pingInterval time.Duration
+	writePatterns []*regexp.Regexp
+	readPatterns  []*regexp.Regexp
+	config        *Config
+	connCounter   uint64 // Atomic counter for connection IDs
+	mu            sync.Mutex
+	next          int
+	session       *Session
+	logger        *zerolog.Logger
+	sqliteDB      *sql.DB
+	ctx           context.Context
+	cancel        context.CancelFunc
+	pingInterval  time.Duration
 }
 
 // NewProxy creates a new Proxy instance
