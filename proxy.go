@@ -70,7 +70,7 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 		session:      session,
 		ctx:          ctx,
 		cancel:       cancel,
-		pingInterval: time.Duration(config.pingInterval) * time.Millisecond,
+		pingInterval: time.Duration(config.pingInterval) * time.Minute,
 	}
 
 	// Start pinging for each upstream
