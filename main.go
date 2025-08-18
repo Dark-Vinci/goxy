@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"os"
+	"log"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -21,6 +21,12 @@ func dbInit(db *sql.DB, logger zerolog.Logger, config *Config) error {
 	_, err = db.Exec(createUsersSQL)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create users table")
+	}
+
+	// Create users table
+	_, err = db.Exec(createSQLLog)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to create db logger table")
 	}
 
 	// Insert sample users
@@ -51,49 +57,47 @@ func dbInit(db *sql.DB, logger zerolog.Logger, config *Config) error {
 }
 
 func main() {
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
-	appLogger := logger.With().Str("Thesis", "api").Logger()
-
 	err := godotenv.Load(".env")
 	if err != nil {
-		logger.Fatal().Msg("Error loading .env file")
-		return
+		log.Fatal("unable to load .env file")
 	}
 
 	db, err := sql.Open("sqlite3", "./upstream.db")
 	if err != nil {
-		logger.Fatal().Err(err).Msgf("Failed to open database: %v", err)
+		log.Printf("Failed to open database: %v", err)
 		return
 	}
+
+	dbLogger := setupLogger(db)
 
 	config := NewConfig()
 
-	if err = dbInit(db, appLogger, config); err != nil {
-		logger.Fatal().Err(err).Msg("Failed to initialize database")
+	if err = dbInit(db, dbLogger, config); err != nil {
+		dbLogger.Fatal().Err(err).Msg("Failed to initialize database")
 		return
 	}
 
-	proxy := NewProxy(config, db, appLogger)
+	proxy := NewProxy(config, db, dbLogger)
 	if proxy == nil {
-		logger.Fatal().Msg("Failed to create proxy")
+		dbLogger.Fatal().Msg("Failed to create proxy")
 		return
 	}
 
 	defer func() {
 		if err := proxy.Close(); err != nil {
-			logger.Error().Err(err).Msg("Failed to close proxy")
+			dbLogger.Error().Err(err).Msg("Failed to close proxy")
 		}
 	}()
 
 	// Start HTTP server in a goroutine
 	go func() {
 		if err := proxy.HTTPServer(); err != nil {
-			logger.Fatal().Err(err).Msg("Failed to start HTTP server")
+			dbLogger.Fatal().Err(err).Msg("Failed to start HTTP server")
 		}
 	}()
 
 	// Start proxy server
 	if err = proxy.Start(); err != nil {
-		logger.Fatal().Err(err).Msg("Failed to start proxy server")
+		dbLogger.Fatal().Err(err).Msg("Failed to start proxy server")
 	}
 }

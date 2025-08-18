@@ -37,11 +37,11 @@ func (p *Proxy) Start() error {
 		}
 
 		request := &Request{
-			connID:    atomic.AddUint64(&p.connCounter, 1),
-			requestId: uuid.New(),
-			role:      "",
-			userID:    uuid.UUID{},
-			conn:      clientConn,
+			connID: atomic.AddUint64(&p.connCounter, 1),
+			//requestId: uuid.New(),
+			//role:      "",
+			UserID: uuid.UUID{},
+			conn:   clientConn,
 		}
 
 		go p.handleConnection(request)

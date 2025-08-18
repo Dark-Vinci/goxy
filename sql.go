@@ -14,3 +14,13 @@ const createUsersSQL = `
 		password TEXT,
 		role TEXT
 	)`
+
+const createSQLLog = `
+    CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        level TEXT,
+        timestamp INTEGER,
+        caller TEXT,
+        message TEXT,
+        fields TEXT
+    );`

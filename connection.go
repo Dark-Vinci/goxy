@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -21,21 +22,26 @@ func (p *Proxy) handleConnection(request *Request) {
 		}
 	}(request.conn)
 
+	fmt.Println("request got here1")
+
 	// Wrap client connection in a buffered reader
 	clientReader := bufio.NewReader(request.conn)
+	fmt.Println("request got here2")
 
 	// Peek the first message to select backend
-	peekBytes, err := clientReader.Peek(16384) // or reasonable peek size
+	peekBytes, err := clientReader.Peek(8192) // or reasonable peek size
 	if err != nil && err != io.EOF {
 		p.logger.Warn().Err(err).Msgf("Failed to peek client startup message: %v", err)
 		return
 	}
 
+	fmt.Println("request got here3")
+
 	query := string(peekBytes)
 
 	// Connect to selected PostgreSQL backend
 	// todo; work more on this part
-	upstream := handleClientQuery(nil, query)
+	upstream := handleClientQuery(p.session, query)
 	upstream.lock.Lock()
 	defer upstream.lock.Unlock()
 
