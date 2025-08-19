@@ -2,8 +2,9 @@ package main
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"github.com/google/uuid"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -47,116 +48,110 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 		select {
 		case <-p.ctx.Done():
 			return p.ctx.Err()
-		case <-ticker.C:
-			isHealthy := upstream.Healthy
-			upstream.lock.Lock()
-			//defer upstream.lock.Unlock()
 
+		case <-ticker.C:
+			// store previous health state
+			prevHealthy := upstream.Healthy
+
+			upstream.lock.Lock()
 			healthy, lag, start := false, 0, time.Now()
 
 			// Send ping request
-			if upstream.Conn != nil {
-				if err := checkUpstream(upstream); err != nil {
-					// destroy the connection and mark it as unhealthy
-					upstream.Conn = nil
-					p.logger.Warn().Err(err).Msgf("Ping failed for %s: %v, ID: %v", upstream.Addr, err, upstream.ID)
-				} else {
-					lag = int(time.Since(start).Milliseconds())
-					healthy = true
-				}
+			//if prevHealthy {
+			if err := checkUpstream(upstream); err != nil {
+				p.logger.Warn().Err(err).Msgf(
+					"Ping failed for %s, ID: %v", upstream.Addr, upstream.ID,
+				)
 			} else {
-				conn, err := net.Dial("tcp", upstream.Addr)
-				if err == nil {
-					healthy = true
-					upstream.Conn = conn
-				} else {
-					p.logger.Fatal().Err(err).Msgf("Failed to re-connect to replica %v: %v", upstream.Addr, err)
-				}
-
 				lag = int(time.Since(start).Milliseconds())
+				healthy = true
 			}
 
 			// insert database
 			_, err := p.sqliteDB.Exec(
-				"INSERT INTO upstream_cron(id, healthy, lag, address, state_change, nth) VALUES (?, ?, ?, ?, ?, ?)",
+				`INSERT INTO upstream_cron(id, healthy, lag, address, state_change, nth)
+				 VALUES (?, ?, ?, ?, ?, ?)`,
 				uuid.New(),
 				boolToInt(healthy), // store as 1/0
 				lag,
 				upstream.Addr,
-				boolToInt(isHealthy == healthy),
+				boolToInt(prevHealthy != healthy), // state change = true if changed
 				p.nthCheck,
 			)
 
 			if err != nil {
-				p.logger.Warn().Err(err).Msgf("Failed to update %s in database: %v", upstream.Addr, err)
+				p.logger.Warn().Err(err).Msgf(
+					"Failed to update %s in database", upstream.Addr,
+				)
 			} else {
-				p.logger.
-					Info().
-					Msgf("Pinged %s at %s: healthy=%v, lag=%dms",
-						upstream.Addr, time.Now().Format("15:04:05"), healthy, lag)
+				p.logger.Info().Msgf(
+					"Pinged %s at %s: healthy=%v, lag=%dms",
+					upstream.Addr, time.Now().Format("15:04:05"), healthy, lag,
+				)
 			}
 
+			// update upstream state
 			upstream.Healthy = healthy
 			upstream.Lag = lag
+			upstream.lock.Unlock()
 
 			// HEALTH STATUS HAS CHANGED
-			if isHealthy != healthy {
-				fmt.Println("Upstream, healthy, isHealthy", healthy, isHealthy, upstream.ID)
-				// WE NEED TO LOCK BEFORE WE ACCESS AND MODIFY THE UPSTREAMS
+			if prevHealthy != healthy {
 				p.lock.Lock()
-
 				if healthy {
-					// ADD TO HEALTHY, REMOVE FROM UNHEALTHY
-					p.servers = append(p.servers, upstream)
-
-					// REMOVE FROM UNHEALTH
+					// move from unhealthy → healthy
 					for i, v := range p.unhealthy {
 						if v.ID == upstream.ID {
 							p.unhealthy = append(p.unhealthy[:i], p.unhealthy[i+1:]...)
 							break
 						}
 					}
+
+					p.servers = append(p.servers, upstream)
+
 				} else {
-					fmt.Println("Unpacking healthy", upstream.ID, p.servers)
-					// REMOVE FROM HEALTHy, ADD TO UNHEALTHy
+					// move from healthy → unhealthy
 					for i, v := range p.servers {
 						if v.ID == upstream.ID {
 							p.servers = append(p.servers[:i], p.servers[i+1:]...)
+							break
 						}
-						break
 					}
 
-					// ADD TO UNHEALTH
 					p.unhealthy = append(p.unhealthy, upstream)
 				}
-
 				p.lock.Unlock()
-				//upstream.lock.Unlock()
 			}
-
-			upstream.lock.Unlock()
 		}
 	}
 }
 
 // Send a simple ping query
 func checkUpstream(up *Upstream) error {
-	_, err := up.Conn.Write(encodeSimpleQuery("SELECT 1"))
+	conn, err := net.Dial("tcp", up.Addr)
+	if err != nil {
+		log.Printf("Failed to connect to %s: %v", up.Addr, err)
+		return err
+	}
+
+	_, err = conn.Write(encodeSimpleQuery("SELECT 1"))
 	if err != nil {
 		log.Printf("Health check failed: write error to %s: %v", up.Addr, err)
 		return err
 	}
 
-	if err = up.Conn.SetReadDeadline(time.Now().Add(2 * time.Millisecond)); err != nil {
+	if err = conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		log.Printf("Health check failed: set read deadline error to %s: %v", up.Addr, err)
 		return err
 	}
 
 	buf := make([]byte, 512)
 
-	if _, err = up.Conn.Read(buf); err != nil {
-		log.Printf("Health check failed: read error from %s: %v", up.Addr, err)
-		return err
+	if _, err = conn.Read(buf); err != nil {
+		if !errors.Is(err, io.EOF) {
+			log.Printf("Health check failed: read error from %s: %v", up.Addr, err)
+			return err
+		}
 	}
 
 	return nil

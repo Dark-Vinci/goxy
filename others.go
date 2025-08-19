@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net"
 	"sync"
 
 	"github.com/google/uuid"
@@ -11,9 +10,9 @@ type Upstream struct {
 	Addr    string
 	Healthy bool
 	Lag     int
-	Conn    net.Conn // your pool wrapper over net.Conn
-	lock    sync.Mutex
-	ID      uuid.UUID
+	//Conn    net.Conn // your pool wrapper over net.Conn
+	lock sync.Mutex
+	ID   uuid.UUID
 }
 
 func boolToInt(b bool) int {

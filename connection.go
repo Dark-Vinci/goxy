@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"sync"
 )
@@ -43,6 +44,8 @@ func (p *Proxy) handleConnection(request *Request) {
 	// delete/modify token from params
 	delete(params, "token")
 
+	fmt.Println("GOR HERE")
+
 	//build startup message
 	newMessage := buildStartupMessage(params, protocol)
 
@@ -54,17 +57,23 @@ func (p *Proxy) handleConnection(request *Request) {
 	// Connect to selected PostgreSQL backend
 	upstream := p.getNextServer()
 	if upstream == nil {
-		_ = writeError(request.conn, "", "", "something went wrong")
+		_ = writeError(request.conn, "", "", "something went wrong1")
 		return
 	}
 
 	upstream.lock.Lock()
 	defer upstream.lock.Unlock()
 
-	// Send startup message to PostgreSQL
-	_, err = upstream.Conn.Write(newMessage)
+	conn, err := net.Dial("tcp", upstream.Addr)
 	if err != nil {
-		_ = writeError(request.conn, "", "", "something went wrong")
+		_ = writeError(request.conn, "", "", "something went wrong2")
+		return
+	}
+
+	// Send startup message to PostgreSQL
+	_, err = conn.Write(newMessage)
+	if err != nil {
+		_ = writeError(request.conn, "", "", "something went wrong2")
 		return
 	}
 
@@ -72,10 +81,10 @@ func (p *Proxy) handleConnection(request *Request) {
 	wg.Add(2)
 
 	// Client -> PROXY
-	go p.frontend(request.conn, upstream.Conn, int(request.connID), role, &wg)
+	go p.frontend(request.conn, conn, int(request.connID), role, &wg)
 
 	// PROXY -> Client
-	go p.backend(upstream.Conn, request.conn, int(request.connID), &wg)
+	go p.backend(conn, request.conn, int(request.connID), &wg)
 
 	wg.Wait()
 

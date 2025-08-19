@@ -54,11 +54,11 @@ func (p *Proxy) Close() error {
 	var errs []error
 
 	// Close replica connections
-	for _, replica := range p.servers {
-		if err := replica.Conn.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("failed to close replica %s: %v", replica.Addr, err))
-		}
-	}
+	//for _, replica := range p.servers {
+	//	if err := replica.Conn.Close(); err != nil {
+	//		errs = append(errs, fmt.Errorf("failed to close replica %s: %v", replica.Addr, err))
+	//	}
+	//}
 
 	// Close database (optional, depending on lifecycle)
 	if err := p.sqliteDB.Close(); err != nil {

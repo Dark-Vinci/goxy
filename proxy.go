@@ -37,7 +37,7 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 	servers, unhealthy := make([]*Upstream, 0), make([]*Upstream, 0)
 
 	for _, v := range config.servers {
-		replica, err := net.Dial("tcp", v)
+		_, err := net.Dial("tcp", v)
 		if err != nil {
 			logger.Fatal().Err(err).Msgf("Failed to connect to replica %v: %v", v, err)
 
@@ -45,9 +45,9 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 				Addr:    v,
 				Healthy: false,
 				Lag:     0,
-				Conn:    nil,
-				lock:    sync.Mutex{},
-				ID:      uuid.New(),
+				//Conn:    nil,
+				lock: sync.Mutex{},
+				ID:   uuid.New(),
 			})
 
 			continue
@@ -57,9 +57,9 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 			Addr:    v,
 			Healthy: true,
 			Lag:     0,
-			Conn:    replica,
-			lock:    sync.Mutex{},
-			ID:      uuid.New(),
+			//Conn:    replica,
+			lock: sync.Mutex{},
+			ID:   uuid.New(),
 		})
 	}
 
