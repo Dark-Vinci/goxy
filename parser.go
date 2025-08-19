@@ -4,23 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"strings"
 )
-
-// parseStartupMessage extracts parameters from startup packet
-func parseStartupMessage(data []byte) map[string]string {
-	params := make(map[string]string)
-	parts := bytes.Split(data, []byte{0})
-	for i := 0; i < len(parts)-1; i += 2 {
-		key := string(parts[i])
-		value := string(parts[i+1])
-		if key != "" {
-			params[key] = value
-		}
-	}
-	return params
-}
 
 // parseErrorOrNotice extracts fields from ErrorResponse or NoticeResponse
 func parseErrorOrNotice(data []byte) map[string]string {
@@ -32,25 +17,6 @@ func parseErrorOrNotice(data []byte) map[string]string {
 		}
 	}
 	return fields
-}
-
-func checkAndLogQueryType(connID int, query string) {
-	q := strings.TrimSpace(strings.ToUpper(query))
-
-	switch {
-	case strings.HasPrefix(q, "SELECT"):
-		log.Printf("FROM-CLIENT; [Conn %d] --> SELECT detected", connID)
-	case strings.HasPrefix(q, "INSERT"):
-		log.Printf("FROM-CLIENT; [Conn %d] --> INSERT detected", connID)
-	case strings.HasPrefix(q, "UPDATE"):
-		log.Printf("FROM-CLIENT; [Conn %d] --> UPDATE detected", connID)
-	case strings.HasPrefix(q, "DELETE"):
-		log.Printf("FROM-CLIENT; [Conn %d] --> DELETE detected", connID)
-	case strings.HasPrefix(q, "CREATE"):
-		log.Printf("FROM-CLIENT; [Conn %d] --> CREATE detected", connID)
-	default:
-		// Non-filtered queries
-	}
 }
 
 // parseRowDescription extracts column names from RowDescription
@@ -109,38 +75,74 @@ func parseParameterStatus(data []byte) [2]string {
 	return [2]string{string(parts[0]), string(parts[1])}
 }
 
-// parseBindParameters extracts parameter values from Bind message
-func parseBindParameters(data []byte, n int) ([]string, error) {
-	var values []string
-	pos := bytes.IndexByte(data, 0) + 1 // Skip portal name
-	if pos >= n {
-		return nil, fmt.Errorf("invalid bind message: no portal name terminator")
+// parseBindParameters parses a PostgreSQL Bind message into a slice of parameter strings.
+func parseBindParameters(data []byte) ([]string, string, error) {
+	if len(data) < 6 || data[0] != 'B' {
+		return nil, "", fmt.Errorf("not a Bind message")
 	}
-	pos += bytes.IndexByte(data[pos:], 0) + 1 // Skip statement name
-	if pos >= n {
-		return nil, fmt.Errorf("invalid bind message: no statement name terminator")
+
+	// skip type + length
+	pos := 5
+
+	// read portal name (null-terminated)
+	end := bytes.IndexByte(data[pos:], 0)
+	if end < 0 {
+		return nil, "", fmt.Errorf("invalid portal name")
 	}
-	if pos+2 > n {
-		return nil, fmt.Errorf("invalid bind message: too short for parameter count")
+	portal := string(data[pos : pos+end])
+	pos += end + 1
+
+	fmt.Println("PORTAL: ", portal)
+
+	// read statement name (null-terminated)
+	end = bytes.IndexByte(data[pos:], 0)
+	if end < 0 {
+		return nil, "", fmt.Errorf("invalid statement name")
 	}
-	numParams := int(binary.BigEndian.Uint16(data[pos : pos+2]))
+	stmtName := string(data[pos : pos+end])
+	pos += end + 1
+
+	// read number of format codes
+	if pos+2 > len(data) {
+		return nil, stmtName, fmt.Errorf("truncated bind message (format count)")
+	}
+	nFormats := int(binary.BigEndian.Uint16(data[pos:]))
+	pos += 2 + (nFormats * 2) // skip format codes
+
+	// number of parameters
+	if pos+2 > len(data) {
+		return nil, stmtName, fmt.Errorf("truncated bind message (param count)")
+	}
+	nParams := int(binary.BigEndian.Uint16(data[pos:]))
 	pos += 2
-	for i := 0; i < numParams && pos < n; i++ {
-		if pos+4 > n {
-			return values, fmt.Errorf("invalid bind message: truncated parameter length at index %d", i)
+
+	params := make([]string, nParams)
+
+	for i := 0; i < nParams; i++ {
+		if pos+4 > len(data) {
+			return nil, stmtName, fmt.Errorf("truncated bind message (param length)")
 		}
-		length := int(binary.BigEndian.Uint32(data[pos : pos+4]))
+		length := int(binary.BigEndian.Uint32(data[pos:]))
 		pos += 4
+
 		if length == -1 {
-			values = append(values, "NULL")
-		} else if length < 0 || pos+length > n {
-			return values, fmt.Errorf("invalid bind message: parameter %d length %d invalid or exceeds buffer (%d)", i, length, n)
+			params[i] = "NULL"
 		} else {
-			values = append(values, string(data[pos:pos+length]))
+			if pos+length > len(data) {
+				return nil, stmtName, fmt.Errorf("truncated bind message (param value)")
+			}
+			val := string(data[pos : pos+length])
+
+			fmt.Println("RAWWWWW", val)
+			// naive quoting for logging
+			params[i] = "'" + strings.ReplaceAll(val, "'", "''") + "'"
+
+			fmt.Println("UNRAWWWWW", params[i])
 			pos += length
 		}
 	}
-	return values, nil
+
+	return params, stmtName, nil
 }
 
 // parseDescribeMessage extracts portal or statement name from Describe message

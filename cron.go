@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/google/uuid"
 	"log"
+	"net"
 	"time"
 )
 
@@ -11,13 +13,19 @@ import (
 // spawn goroutines for primary
 // spawn goroutines for each replicas
 func (p *Proxy) healthCheck() {
-	go func() {
-		if err := p.pingUpstream(p.session.UpPrimary); err != nil {
-			return
-		}
-	}()
+	p.nthCheck = 1
 
-	for _, v := range p.session.Replicas {
+	// for healthy servers
+	for _, v := range p.servers {
+		go func(replica *Upstream) {
+			if err := p.pingUpstream(replica); err != nil {
+				return
+			}
+		}(v)
+	}
+
+	// unhealth server pings
+	for _, v := range p.unhealthy {
 		go func(replica *Upstream) {
 			if err := p.pingUpstream(replica); err != nil {
 				return
@@ -40,22 +48,45 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 		case <-p.ctx.Done():
 			return p.ctx.Err()
 		case <-ticker.C:
+			isHealthy := upstream.Healthy
 			upstream.lock.Lock()
+			//defer upstream.lock.Unlock()
 
 			healthy, lag, start := false, 0, time.Now()
 
 			// Send ping request
 			if upstream.Conn != nil {
 				if err := checkUpstream(upstream); err != nil {
-					p.logger.Warn().Err(err).Msgf("Ping failed for %s: %v", upstream.Addr, err)
+					// destroy the connection and mark it as unhealthy
+					upstream.Conn = nil
+					p.logger.Warn().Err(err).Msgf("Ping failed for %s: %v, ID: %v", upstream.Addr, err, upstream.ID)
 				} else {
 					lag = int(time.Since(start).Milliseconds())
 					healthy = true
 				}
+			} else {
+				conn, err := net.Dial("tcp", upstream.Addr)
+				if err == nil {
+					healthy = true
+					upstream.Conn = conn
+				} else {
+					p.logger.Fatal().Err(err).Msgf("Failed to re-connect to replica %v: %v", upstream.Addr, err)
+				}
+
+				lag = int(time.Since(start).Milliseconds())
 			}
 
-			// Update database
-			_, err := p.sqliteDB.Exec(fmt.Sprintf("UPDATE upstreams SET healthy = %v, lag = %v WHERE addr = %v", healthy, lag, upstream.Addr))
+			// insert database
+			_, err := p.sqliteDB.Exec(
+				"INSERT INTO upstream_cron(id, healthy, lag, address, state_change, nth) VALUES (?, ?, ?, ?, ?, ?)",
+				uuid.New(),
+				boolToInt(healthy), // store as 1/0
+				lag,
+				upstream.Addr,
+				boolToInt(isHealthy == healthy),
+				p.nthCheck,
+			)
+
 			if err != nil {
 				p.logger.Warn().Err(err).Msgf("Failed to update %s in database: %v", upstream.Addr, err)
 			} else {
@@ -67,6 +98,41 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 
 			upstream.Healthy = healthy
 			upstream.Lag = lag
+
+			// HEALTH STATUS HAS CHANGED
+			if isHealthy != healthy {
+				fmt.Println("Upstream, healthy, isHealthy", healthy, isHealthy, upstream.ID)
+				// WE NEED TO LOCK BEFORE WE ACCESS AND MODIFY THE UPSTREAMS
+				p.lock.Lock()
+
+				if healthy {
+					// ADD TO HEALTHY, REMOVE FROM UNHEALTHY
+					p.servers = append(p.servers, upstream)
+
+					// REMOVE FROM UNHEALTH
+					for i, v := range p.unhealthy {
+						if v.ID == upstream.ID {
+							p.unhealthy = append(p.unhealthy[:i], p.unhealthy[i+1:]...)
+							break
+						}
+					}
+				} else {
+					fmt.Println("Unpacking healthy", upstream.ID, p.servers)
+					// REMOVE FROM HEALTHy, ADD TO UNHEALTHy
+					for i, v := range p.servers {
+						if v.ID == upstream.ID {
+							p.servers = append(p.servers[:i], p.servers[i+1:]...)
+						}
+						break
+					}
+
+					// ADD TO UNHEALTH
+					p.unhealthy = append(p.unhealthy, upstream)
+				}
+
+				p.lock.Unlock()
+				//upstream.lock.Unlock()
+			}
 
 			upstream.lock.Unlock()
 		}
@@ -81,7 +147,7 @@ func checkUpstream(up *Upstream) error {
 		return err
 	}
 
-	if err = up.Conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+	if err = up.Conn.SetReadDeadline(time.Now().Add(2 * time.Millisecond)); err != nil {
 		log.Printf("Health check failed: set read deadline error to %s: %v", up.Addr, err)
 		return err
 	}

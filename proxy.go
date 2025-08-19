@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 )
@@ -18,49 +19,47 @@ type Proxy struct {
 	readPatterns  []*regexp.Regexp
 	config        *Config
 	connCounter   uint64 // Atomic counter for connection IDs
-	mu            sync.Mutex
+	lock          sync.Mutex
 	next          int
-	session       *Session
 	logger        *zerolog.Logger
 	sqliteDB      *sql.DB
 	ctx           context.Context
 	cancel        context.CancelFunc
 	pingInterval  time.Duration
+	servers       []*Upstream
+	unhealthy     []*Upstream
+	serverIndex   uint64
+	nthCheck      int
 }
 
 // NewProxy creates a new Proxy instance
 func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
-	session := &Session{}
+	servers, unhealthy := make([]*Upstream, 0), make([]*Upstream, 0)
 
-	master, err := net.Dial("tcp", config.master)
-	if err != nil {
-		logger.Fatal().Err(err).Msgf("Failed to connect to master: %v", err)
-		return nil
-	}
-
-	session.UpPrimary = &Upstream{
-		Addr:    config.master,
-		Role:    RolePrimary,
-		Healthy: true,
-		Lag:     0,
-		Conn:    master,
-		lock:    sync.Mutex{},
-	}
-
-	for _, v := range config.slaves {
+	for _, v := range config.servers {
 		replica, err := net.Dial("tcp", v)
 		if err != nil {
 			logger.Fatal().Err(err).Msgf("Failed to connect to replica %v: %v", v, err)
+
+			unhealthy = append(unhealthy, &Upstream{
+				Addr:    v,
+				Healthy: false,
+				Lag:     0,
+				Conn:    nil,
+				lock:    sync.Mutex{},
+				ID:      uuid.New(),
+			})
+
 			continue
 		}
 
-		session.Replicas = append(session.Replicas, &Upstream{
+		servers = append(servers, &Upstream{
 			Addr:    v,
-			Role:    RoleReplica,
-			Healthy: false,
+			Healthy: true,
 			Lag:     0,
 			Conn:    replica,
 			lock:    sync.Mutex{},
+			ID:      uuid.New(),
 		})
 	}
 
@@ -70,14 +69,19 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 		config:       config,
 		logger:       &logger,
 		sqliteDB:     db,
-		session:      session,
+		servers:      servers,
 		ctx:          ctx,
 		cancel:       cancel,
-		pingInterval: time.Duration(config.pingInterval) * time.Minute,
+		serverIndex:  uint64(0),
+		unhealthy:    unhealthy,
+		lock:         sync.Mutex{},
+		nthCheck:     0,
+		pingInterval: time.Duration(config.pingInterval) * time.Second,
 	}
 
 	// Start pinging for each upstream
 	p.healthCheck()
+	p.initializePatterns()
 
 	return p
 }

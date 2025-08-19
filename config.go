@@ -9,9 +9,8 @@ import (
 // Config holds proxy configuration
 type Config struct {
 	listenAddr    string
-	master        string
 	pingInterval  int
-	slaves        []string
+	servers       []string
 	HTTPListen    string
 	JWTSecret     string
 	adminUser     string
@@ -19,7 +18,6 @@ type Config struct {
 }
 
 func NewConfig() *Config {
-	master := os.Getenv("MASTER")
 	slavesStr := os.Getenv("SLAVES")
 	listenAddr := os.Getenv("LISTEN_ADDRESS")
 	pingInterval := os.Getenv("PING_INTERVAL")
@@ -33,8 +31,7 @@ func NewConfig() *Config {
 	slaves := strings.Split(slavesStr, ",")
 
 	return &Config{
-		master:        master,
-		slaves:        slaves,
+		servers:       slaves,
 		listenAddr:    listenAddr,
 		pingInterval:  ping,
 		HTTPListen:    httpListen,

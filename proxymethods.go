@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"strings"
 	"sync/atomic"
 
 	"github.com/google/uuid"
@@ -52,14 +51,10 @@ func (p *Proxy) Close() error {
 	// this stops all goroutines(health check, forwarding)
 	p.cancel()
 
-	// Close master connection
 	var errs []error
-	if err := p.session.UpPrimary.Conn.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("failed to close master %s: %v", p.session.UpPrimary.Addr, err))
-	}
 
 	// Close replica connections
-	for _, replica := range p.session.Replicas {
+	for _, replica := range p.servers {
 		if err := replica.Conn.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("failed to close replica %s: %v", replica.Addr, err))
 		}
@@ -76,21 +71,4 @@ func (p *Proxy) Close() error {
 	}
 
 	return nil
-}
-
-// Select backend based on query type
-func (p *Proxy) selectBackend(query string) string {
-	query = strings.TrimSpace(strings.ToUpper(query))
-
-	if strings.HasPrefix(query, "SELECT") && len(p.config.slaves) > 0 {
-		// Round-robin among replicas
-		p.mu.Lock()
-		addr := p.config.slaves[p.next]
-		p.next = (p.next + 1) % len(p.config.slaves)
-		p.mu.Unlock()
-		return addr
-	}
-
-	// Writes always go to master
-	return p.config.master
 }

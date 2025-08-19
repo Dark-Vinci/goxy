@@ -19,18 +19,20 @@ func (p *Proxy) handleConnection(request *Request) {
 		}
 	}(request.conn)
 
+	// defer insertion into Request
+
 	// read startup message
 	rawMessage, _ := readStartupMessage(request.conn)
 
 	//parse the startup message
 	params, protocol := parseTheStartupMessage(rawMessage)
 
-	if _, ok := params["token"]; !ok {
+	if _, ok := params[TokenKey]; !ok {
 		_ = writeError(request.conn, "42883", "invalid_authorization_specification", "token is missing")
 		return
 	}
 
-	token, _ := params["token"]
+	token, _ := params[TokenKey]
 
 	_, role, err := p.validateJWT(token)
 	if err != nil {
@@ -44,8 +46,18 @@ func (p *Proxy) handleConnection(request *Request) {
 	//build startup message
 	newMessage := buildStartupMessage(params, protocol)
 
+	if len(p.servers) == 0 {
+		_ = writeError(request.conn, "42883", "invalid_authorization_specification", "all servers are down, please try again later")
+		return
+	}
+
 	// Connect to selected PostgreSQL backend
-	upstream := p.session.UpPrimary
+	upstream := p.getNextServer()
+	if upstream == nil {
+		_ = writeError(request.conn, "", "", "something went wrong")
+		return
+	}
+
 	upstream.lock.Lock()
 	defer upstream.lock.Unlock()
 
@@ -59,11 +71,11 @@ func (p *Proxy) handleConnection(request *Request) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Client -> PROXY -> PostgreSQL
-	go FromClient(request.conn, upstream.Conn, int(request.connID), role, &wg)
+	// Client -> PROXY
+	go p.frontend(request.conn, upstream.Conn, int(request.connID), role, &wg)
 
-	// PostgreSQL -> PROXY -> Client
-	go FromDB(upstream.Conn, request.conn, int(request.connID), &wg)
+	// PROXY -> Client
+	go p.backend(upstream.Conn, request.conn, int(request.connID), &wg)
 
 	wg.Wait()
 

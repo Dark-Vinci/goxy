@@ -1,7 +1,5 @@
 package main
 
-import "net"
-
 type QueryClass int
 
 const (
@@ -26,7 +24,9 @@ const (
 	UserRoleReadOnly  UserRole = "read_only"
 )
 
-type ConnPool *net.Conn
+const TokenKey = "token"
+
+//type ConnPool *net.Conn
 
 var writePrefixes = []string{
 	"INSERT", "UPDATE", "DELETE", "MERGE", "CREATE", "ALTER", "DROP", "TRUNCATE",
