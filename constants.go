@@ -26,11 +26,10 @@ const (
 
 const TokenKey = "token"
 
-//type ConnPool *net.Conn
-
-var writePrefixes = []string{
-	"INSERT", "UPDATE", "DELETE", "MERGE", "CREATE", "ALTER", "DROP", "TRUNCATE",
-	"GRANT", "REVOKE", "VACUUM", "ANALYZE", "REINDEX", "REFRESH", "CALL",
-	"COPY ", // COPY table FROM … writes; COPY … TO is read-ish but keep simple
-	"LOCK", "CLUSTER", "DISCARD", "SECURITY LABEL",
-}
+//
+//var writePrefixes = []string{
+//	"INSERT", "UPDATE", "DELETE", "MERGE", "CREATE", "ALTER", "DROP", "TRUNCATE",
+//	"GRANT", "REVOKE", "VACUUM", "ANALYZE", "REINDEX", "REFRESH", "CALL",
+//	"COPY ", // COPY table FROM … writes; COPY … TO is read-ish but keep simple
+//	"LOCK", "CLUSTER", "DISCARD", "SECURITY LABEL",
+//}

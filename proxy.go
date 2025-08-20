@@ -11,6 +11,10 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
+	"thesis/store"
 )
 
 // Proxy represents the PostgreSQL proxy
@@ -30,6 +34,13 @@ type Proxy struct {
 	unhealthy     []*Upstream
 	serverIndex   uint64
 	nthCheck      int
+
+	store struct {
+		healthCheckStore store.HealthCheckInterface
+		userStore        store.UserInterface
+		requestStore     store.RequestInterface
+		logsStore        store.LogsInterface
+	}
 }
 
 // NewProxy creates a new Proxy instance
@@ -45,9 +56,8 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 				Addr:    v,
 				Healthy: false,
 				Lag:     0,
-				//Conn:    nil,
-				lock: sync.Mutex{},
-				ID:   uuid.New(),
+				lock:    sync.Mutex{},
+				ID:      uuid.New(),
 			})
 
 			continue
@@ -57,13 +67,27 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 			Addr:    v,
 			Healthy: true,
 			Lag:     0,
-			//Conn:    replica,
-			lock: sync.Mutex{},
-			ID:   uuid.New(),
+			lock:    sync.Mutex{},
+			ID:      uuid.New(),
 		})
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	gormDB, err := gorm.Open(
+		sqlite.New(sqlite.Config{
+			Conn: db,
+		}), &gorm.Config{})
+
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to open database")
+		panic("something went wrong")
+	}
+
+	userStore := store.NewUserStore(&logger, gormDB)
+	requestStore := store.NewRequestStore(&logger, gormDB)
+	healthCheckStore := store.NewHealthCheckStore(&logger, gormDB)
+	logsStore := store.NewLogStore(gormDB, &logger)
 
 	p := &Proxy{
 		config:       config,
@@ -77,6 +101,18 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 		lock:         sync.Mutex{},
 		nthCheck:     0,
 		pingInterval: time.Duration(config.pingInterval) * time.Second,
+
+		store: struct {
+			healthCheckStore store.HealthCheckInterface
+			userStore        store.UserInterface
+			requestStore     store.RequestInterface
+			logsStore        store.LogsInterface
+		}{
+			healthCheckStore: healthCheckStore,
+			userStore:        userStore,
+			requestStore:     requestStore,
+			logsStore:        logsStore,
+		},
 	}
 
 	// Start pinging for each upstream

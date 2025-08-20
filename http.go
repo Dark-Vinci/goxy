@@ -12,11 +12,26 @@ import (
 // HTTPServer starts the HTTP server for login
 func (p *Proxy) HTTPServer() error {
 	r := mux.NewRouter()
-	r.HandleFunc("/login", p.handleLogin).Methods("POST")
-	r.HandleFunc("/signup", p.handleSignup).Methods("POST")
-	r.HandleFunc("/update-user", p.handleUpdateUser).Methods("PUT")
+
+	//Health check
+	r.HandleFunc("/health/healthy", p.handleSignup).Methods("GET")
+	r.HandleFunc("/health/unhealthy", p.handleLogin).Methods("GET")
+
+	// Users
+	r.HandleFunc("/users/login", p.handleLogin).Methods("POST")
+	r.HandleFunc("/users/signup", p.handleSignup).Methods("POST")
+	r.HandleFunc("/users/update-user", p.handleUpdateUser).Methods("PUT")
+
+	//Logs
+	r.HandleFunc("/logs", p.handleSignup).Methods("GET")
+	r.HandleFunc("/logs/{request_id}", p.handleLogin).Methods("GET")
+
+	// Requests
+	r.HandleFunc("/request", p.handleSignup).Methods("GET")
+	r.HandleFunc("/request/{id}", p.handleLogin).Methods("GET")
 
 	p.logger.Info().Msgf("HTTP server listening on %s", p.config.HTTPListen)
+
 	return http.ListenAndServe(p.config.HTTPListen, r)
 }
 

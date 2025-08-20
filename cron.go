@@ -3,11 +3,12 @@ package main
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"net"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // health check for primary and replicas

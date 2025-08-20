@@ -1,9 +1,18 @@
 package store
 
 import (
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type HealthCheck struct {
+	ID        uuid.UUID `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
+	Addr      string    `gorm:"not null" json:"addr"`
+	Healthy   int       `gorm:"not null" json:"healthy"`
+	Lag       int       `gorm:"not null" json:"lag"`
+	CreatedAt time.Time `gorm:"not null" json:"created_at"`
+}
 
 type User struct {
 	ID        uuid.UUID `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
@@ -17,13 +26,13 @@ type User struct {
 }
 
 type Request struct {
-	ID           uuid.UUID `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
-	UserID       uuid.UUID `gorm:"not null" json:"user_id"`
-	Sql          string    `gorm:"not null" json:"sql"`
-	CreatedAt    time.Time `gorm:"not null" json:"created_at"`
-	CompletedAt  time.Time `gorm:"not null" json:"completed_at"`
-	Duration     int       `gorm:"not null" json:"duration"`
-	ConnectionID uuid.UUID `gorm:"not null" json:"connection_id"`
+	ID           uuid.UUID  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
+	UserID       *uuid.UUID `gorm:"not null" json:"user_id"`
+	Sql          string     `gorm:"not null" json:"sql"`
+	CreatedAt    time.Time  `gorm:"not null" json:"created_at"`
+	CompletedAt  time.Time  `gorm:"not null" json:"completed_at"`
+	Duration     int        `gorm:"not null" json:"duration"`
+	ConnectionID uuid.UUID  `gorm:"not null" json:"connection_id"`
 }
 
 type LogEntry struct {
@@ -35,10 +44,10 @@ type LogEntry struct {
 	Fields    map[string]interface{} `json:"fields"`
 }
 
-// PaginatedLogsResult holds the paginated query results
-type PaginatedLogsResult struct {
-	Logs       []LogEntry `json:"logs"`
-	TotalCount int64      `json:"total_count"`
-	Page       int        `json:"page"`
-	PageSize   int        `json:"page_size"`
+// PaginatedResult holds the paginated query results
+type PaginatedResult[T any] struct {
+	Result     T     `json:"result"`
+	TotalCount int64 `json:"total_count"`
+	Page       int   `json:"page"`
+	PageSize   int   `json:"page_size"`
 }

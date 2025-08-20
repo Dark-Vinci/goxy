@@ -15,6 +15,7 @@ type UserInterface interface {
 	GetByID(ctx context.Context, requestID uuid.UUID, userID uuid.UUID) (*User, error)
 	GetByUsername(ctx context.Context, requestID uuid.UUID, username string) (*User, error)
 	Delete(ctx context.Context, requestID uuid.UUID, userID uuid.UUID, now time.Time) error
+	GetPaginatedUsers(ctx context.Context, requestID uuid.UUID, page, pageSize int) (PaginatedResult[[]User], error)
 }
 
 // Compile-time check
@@ -23,6 +24,39 @@ var _ UserInterface = (*UserStore)(nil)
 type UserStore struct {
 	db     *gorm.DB
 	logger *zerolog.Logger
+}
+
+func NewUserStore(logger *zerolog.Logger, db *gorm.DB) UserInterface {
+	return &UserStore{
+		logger: logger,
+		db:     db,
+	}
+}
+
+func (u UserStore) GetPaginatedUsers(ctx context.Context, requestID uuid.UUID, page, pageSize int) (PaginatedResult[[]User], error) {
+	log := u.logger.With().
+		Str(MethodStrHelper, "user.GetPaginatedUsers").
+		Str(RequestID, requestID.String()).
+		Logger()
+
+	log.Info().Msg("Got a request to get paginated users")
+
+	offset := (page - 1) * pageSize
+	result := PaginatedResult[[]User]{
+		Result:   []User{},
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	if err := u.db.WithContext(ctx).
+		Offset(offset).
+		Limit(pageSize).
+		Find(&result.Result).Error; err != nil {
+		log.Err(err).Msg("Failed to get paginated users")
+		return result, err
+	}
+
+	return result, nil
 }
 
 func (u UserStore) Create(ctx context.Context, requestID uuid.UUID, payload User) (*User, error) {
