@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -34,7 +36,7 @@ func (p *Proxy) handleSignup(w http.ResponseWriter, r *http.Request) {
 		Role     string `json:"role"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&user); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to decode signup request")
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
@@ -79,6 +81,185 @@ func (p *Proxy) handleSignup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully"})
+}
+
+func (p *Proxy) handleGetUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := uuid.New()
+	userID := r.URL.Query().Get("id")
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid user ID")
+		http.Error(w, "Invalid or missing userID", http.StatusBadRequest)
+		return
+	}
+
+	// Validate JWT and ensure admin role
+	username, role, err := p.validateJWTFromHeader(r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted signup", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	user, err := p.store.userStore.GetByID(ctx, requestID, userUUID)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get user")
+		http.Error(w, "user not found", http.StatusNotFound)
+	}
+
+	p.logger.Info().Msgf("successfuly fetched user")
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(user)
+}
+
+// handleFetchUsers fetches all users (admin-only)
+func (p *Proxy) handleFetchUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := uuid.New()
+
+	// Validate JWT and ensure admin role
+	username, role, err := p.validateJWTFromHeader(r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted signup", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	query := r.URL.Query()
+
+	pageSizeStr := query.Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10 // default
+	}
+
+	// Extract and parse page
+	pageStr := query.Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 10 // default
+	}
+
+	result, err := p.store.userStore.GetPaginatedUsers(ctx, requestID, page, pageSize)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get users")
+		http.Error(w, "something went wrong", http.StatusNotFound)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched users")
+	w.WriteHeader(http.StatusOK)
+
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+// handleSignup creates a new user (admin-only)
+func (p *Proxy) handleGetFailedHealthChecks(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := uuid.New()
+
+	// Validate JWT and ensure admin role
+	username, role, err := p.validateJWTFromHeader(r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted signup", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	query := r.URL.Query()
+
+	pageSizeStr := query.Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10 // default
+	}
+
+	// Extract and parse page
+	pageStr := query.Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 10 // default
+	}
+
+	result, err := p.store.healthCheckStore.GetFailedHealthChecks(ctx, requestID, page, pageSize)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get health checks")
+		http.Error(w, "something went wrong", http.StatusNotFound)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched failed health checks")
+	w.WriteHeader(http.StatusOK)
+
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+// handleGetHealthChecks get health checks (admin-only)
+func (p *Proxy) handleGetHealthChecks(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := uuid.New()
+
+	// Validate JWT and ensure admin role
+	username, role, err := p.validateJWTFromHeader(r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted signup", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	query := r.URL.Query()
+
+	pageSizeStr := query.Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10 // default
+	}
+
+	// Extract and parse page
+	pageStr := query.Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 10 // default
+	}
+
+	result, err := p.store.healthCheckStore.GetPaginatedHealthChecks(ctx, requestID, page, pageSize)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get health checks")
+		http.Error(w, "something went wrong", http.StatusNotFound)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched health checks")
+	w.WriteHeader(http.StatusOK)
+
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func (p *Proxy) handleUpdateUser(w http.ResponseWriter, r *http.Request) {

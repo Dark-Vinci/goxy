@@ -14,13 +14,15 @@ func (p *Proxy) HTTPServer() error {
 	r := mux.NewRouter()
 
 	//Health check
-	r.HandleFunc("/health/healthy", p.handleSignup).Methods("GET")
-	r.HandleFunc("/health/unhealthy", p.handleLogin).Methods("GET")
+	r.HandleFunc("/health/healthy", p.handleGetHealthChecks).Methods("GET")
+	r.HandleFunc("/health/unhealthy", p.handleGetFailedHealthChecks).Methods("GET")
 
 	// Users
 	r.HandleFunc("/users/login", p.handleLogin).Methods("POST")
 	r.HandleFunc("/users/signup", p.handleSignup).Methods("POST")
 	r.HandleFunc("/users/update-user", p.handleUpdateUser).Methods("PUT")
+	r.HandleFunc("/users", p.handleFetchUsers).Methods("GET")
+	r.HandleFunc("/users/{id}", p.handleGetUser).Methods("GET")
 
 	//Logs
 	r.HandleFunc("/logs", p.handleSignup).Methods("GET")
