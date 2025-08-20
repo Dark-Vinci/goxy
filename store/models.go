@@ -18,7 +18,7 @@ type User struct {
 	ID        uuid.UUID `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
 	Username  string    `gorm:"uniqueIndex;not null" json:"username"`
 	Password  string    `gorm:"not null" json:"password"`
-	IsAdmin   string    `gorm:"not null" json:"role"` // admin,
+	IsAdmin   bool      `gorm:"not null" json:"role"` // admin,
 	Role      string
 	CreatedAt time.Time  `gorm:"not null" json:"created_at"`
 	UpdatedAt time.Time  `gorm:"not null" json:"updated_at"`

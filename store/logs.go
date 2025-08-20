@@ -10,7 +10,7 @@ import (
 
 type LogsInterface interface {
 	GetPaginatedLogs(ctx context.Context, requestID uuid.UUID, page, pageSize int, levelFilter string) (PaginatedResult[[]LogEntry], error)
-	// GET BY REQUEST ID
+	GetRequestIDLogs(ctx context.Context, requestID uuid.UUID, requestRequestID uuid.UUID) (PaginatedResult[[]LogEntry], error)
 }
 
 type LogStore struct {
@@ -24,11 +24,14 @@ func NewLogStore(db *gorm.DB, log *zerolog.Logger) LogsInterface {
 		log: log,
 	}
 }
+func (l *LogStore) GetRequestIDLogs(ctx context.Context, requestID uuid.UUID, requestRequestID uuid.UUID) (PaginatedResult[[]LogEntry], error) {
+	//TODO implement me
+	panic("implement me")
+}
 
 var _ LogsInterface = (*LogStore)(nil)
 
 func (l *LogStore) GetPaginatedLogs(ctx context.Context, requestID uuid.UUID, page, pageSize int, levelFilter string) (PaginatedResult[[]LogEntry], error) {
-
 	log := l.log.With().
 		Str(MethodStrHelper, "logs.GetPaginatedLogs").
 		Str(RequestID, requestID.String()).

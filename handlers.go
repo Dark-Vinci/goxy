@@ -11,13 +11,18 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
+
+	"thesis/store"
 )
 
 // handleSignup creates a new user (admin-only)
 func (p *Proxy) handleSignup(w http.ResponseWriter, r *http.Request) {
+	ctx, requestID := r.Context(), uuid.New()
+
 	// Validate JWT and ensure admin role
-	username, role, err := p.validateJWTFromHeader(r)
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
 	if err != nil {
 		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
 		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
@@ -63,10 +68,21 @@ func (p *Proxy) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	u := store.User{
+		ID:        uuid.New(),
+		Username:  user.Username,
+		Password:  string(hashedPassword),
+		IsAdmin:   false,
+		Role:      user.Role,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		DeletedAt: nil,
+	}
+
 	// Insert user
-	_, err = p.sqliteDB.Exec("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-		user.Username, hashedPassword, user.Role)
+	_, err = p.store.userStore.Create(ctx, requestID, u)
 	if err != nil {
+		//todo; update to gorm error
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			p.logger.Warn().Msgf("Username %s already exists", user.Username)
 			http.Error(w, "Username already exists", http.StatusConflict)
@@ -84,9 +100,8 @@ func (p *Proxy) handleSignup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) handleGetUser(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	requestID := uuid.New()
-	userID := r.URL.Query().Get("id")
+	ctx, requestID := r.Context(), uuid.New()
+	userID := mux.Vars(r)["id"]
 
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
@@ -96,7 +111,7 @@ func (p *Proxy) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate JWT and ensure admin role
-	username, role, err := p.validateJWTFromHeader(r)
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
 	if err != nil {
 		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
 		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
@@ -123,11 +138,10 @@ func (p *Proxy) handleGetUser(w http.ResponseWriter, r *http.Request) {
 
 // handleFetchUsers fetches all users (admin-only)
 func (p *Proxy) handleFetchUsers(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	requestID := uuid.New()
+	ctx, requestID := r.Context(), uuid.New()
 
 	// Validate JWT and ensure admin role
-	username, role, err := p.validateJWTFromHeader(r)
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
 	if err != nil {
 		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
 		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
@@ -152,7 +166,7 @@ func (p *Proxy) handleFetchUsers(w http.ResponseWriter, r *http.Request) {
 	pageStr := query.Get("page")
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page <= 0 {
-		page = 10 // default
+		page = 1 // default
 	}
 
 	result, err := p.store.userStore.GetPaginatedUsers(ctx, requestID, page, pageSize)
@@ -170,11 +184,10 @@ func (p *Proxy) handleFetchUsers(w http.ResponseWriter, r *http.Request) {
 
 // handleSignup creates a new user (admin-only)
 func (p *Proxy) handleGetFailedHealthChecks(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	requestID := uuid.New()
+	ctx, requestID := r.Context(), uuid.New()
 
 	// Validate JWT and ensure admin role
-	username, role, err := p.validateJWTFromHeader(r)
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
 	if err != nil {
 		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
 		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
@@ -199,7 +212,7 @@ func (p *Proxy) handleGetFailedHealthChecks(w http.ResponseWriter, r *http.Reque
 	pageStr := query.Get("page")
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page <= 0 {
-		page = 10 // default
+		page = 1 // default
 	}
 
 	result, err := p.store.healthCheckStore.GetFailedHealthChecks(ctx, requestID, page, pageSize)
@@ -217,11 +230,10 @@ func (p *Proxy) handleGetFailedHealthChecks(w http.ResponseWriter, r *http.Reque
 
 // handleGetHealthChecks get health checks (admin-only)
 func (p *Proxy) handleGetHealthChecks(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	requestID := uuid.New()
+	ctx, requestID := r.Context(), uuid.New()
 
 	// Validate JWT and ensure admin role
-	username, role, err := p.validateJWTFromHeader(r)
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
 	if err != nil {
 		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
 		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
@@ -246,7 +258,7 @@ func (p *Proxy) handleGetHealthChecks(w http.ResponseWriter, r *http.Request) {
 	pageStr := query.Get("page")
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page <= 0 {
-		page = 10 // default
+		page = 1 // default
 	}
 
 	result, err := p.store.healthCheckStore.GetPaginatedHealthChecks(ctx, requestID, page, pageSize)
@@ -263,8 +275,10 @@ func (p *Proxy) handleGetHealthChecks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	ctx, requestID := r.Context(), uuid.New()
+
 	// Validate JWT and ensure admin role
-	username, role, err := p.validateJWTFromHeader(r)
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
 	if err != nil {
 		p.logger.Warn().Err(err).Msg("Invalid or missing token for update-user")
 		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
@@ -309,23 +323,13 @@ func (p *Proxy) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user exists
-	var exists bool
-	err = p.sqliteDB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)", user.Username).Scan(&exists)
+	fetched, err := p.store.userStore.GetByUsername(ctx, requestID, user.Username)
 	if err != nil {
 		p.logger.Error().Err(err).Msgf("Failed to check user %s existence", user.Username)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, "user not found", http.StatusNotFound)
 		return
 	}
 
-	if !exists {
-		p.logger.Warn().Msgf("User %s not found for update", user.Username)
-		http.Error(w, "User not found", http.StatusNotFound)
-		return
-	}
-
-	// Prepare update query
-	query := "UPDATE users SET"
-	args := []interface{}{}
 	if user.Password != "" {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -333,23 +337,16 @@ func (p *Proxy) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		query += " password = ?"
-		args = append(args, hashedPassword)
+
+		fetched.Password = string(hashedPassword)
 	}
 
 	if user.Role != "" {
-		if len(args) > 0 {
-			query += ","
-		}
-		query += " role = ?"
-		args = append(args, user.Role)
+		fetched.Role = user.Role
 	}
 
-	query += " WHERE username = ?"
-	args = append(args, user.Username)
-
 	// Update user
-	_, err = p.sqliteDB.Exec(query, args...)
+	err = p.store.userStore.Update(ctx, requestID, *fetched)
 	if err != nil {
 		p.logger.Error().Err(err).Msgf("Failed to update user %s", user.Username)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -362,7 +359,12 @@ func (p *Proxy) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) handleLogin(w http.ResponseWriter, r *http.Request) {
-	var credential creds
+	ctx, requestID := r.Context(), uuid.New()
+
+	var credential struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
 
 	if err := json.NewDecoder(r.Body).Decode(&credential); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to decode login request")
@@ -371,8 +373,7 @@ func (p *Proxy) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify credentials
-	var storedHash, role string
-	err := p.sqliteDB.QueryRow("SELECT password, role FROM users WHERE username = ?", credential.Username).Scan(&storedHash, &role)
+	fetched, err := p.store.userStore.GetByUsername(ctx, requestID, credential.Username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			p.logger.Warn().Msgf("User not found: %s", credential.Username)
@@ -383,7 +384,7 @@ func (p *Proxy) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(credential.Password)); err != nil {
+	if err = bcrypt.CompareHashAndPassword([]byte(fetched.Password), []byte(credential.Password)); err != nil {
 		p.logger.Warn().Msgf("Invalid password for %s", credential.Username)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
@@ -392,7 +393,7 @@ func (p *Proxy) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// Generate JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"username": credential.Username,
-		"role":     role,
+		"role":     fetched.Role,
 		"exp":      time.Now().Add(24 * time.Hour).Unix(),
 	})
 
@@ -403,7 +404,173 @@ func (p *Proxy) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.logger.Info().Msgf("User %s logged in with role %s", credential.Username, role)
+	p.logger.Info().Msgf("User %s logged in with role %s", credential.Username, fetched.Role)
 
 	_ = json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
+}
+
+// handleGetLogs fetches logs from the DB
+func (p *Proxy) handleGetLogs(w http.ResponseWriter, r *http.Request) {
+	ctx, requestID := r.Context(), uuid.New()
+
+	// Validate JWT and ensure admin role
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted signup", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	query := r.URL.Query()
+
+	pageSizeStr := query.Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10 // default
+	}
+
+	// Extract and parse page
+	pageStr := query.Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 1 // default
+	}
+
+	filter := query.Get("filter")
+
+	result, err := p.store.logsStore.GetPaginatedLogs(ctx, requestID, page, pageSize, filter)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get logs")
+		http.Error(w, "something went wrong", http.StatusServiceUnavailable)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched logs")
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (p *Proxy) handleGetLogsByRequestID(w http.ResponseWriter, r *http.Request) {
+	ctx, requestID := r.Context(), uuid.New()
+
+	// Validate JWT and ensure admin role
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted signup", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	requestRequestIDStr := mux.Vars(r)["request_id"]
+
+	requestRequestID, err := uuid.Parse(requestRequestIDStr)
+	if err != nil {
+		p.logger.Warn().Err(err).Msgf("Invalid request ID %s", requestRequestIDStr)
+		http.Error(w, "Invalid request ID", http.StatusBadRequest)
+	}
+
+	result, err := p.store.logsStore.GetRequestIDLogs(ctx, requestID, requestRequestID)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get logs")
+		http.Error(w, "something went wrong", http.StatusServiceUnavailable)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched logs")
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (p *Proxy) handleGetDBRequestByID(w http.ResponseWriter, r *http.Request) {
+	ctx, requestID := r.Context(), uuid.New()
+
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted signup", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	requestIDStr := mux.Vars(r)["id"]
+	requestRequestID, err := uuid.Parse(requestIDStr)
+	if err != nil {
+		p.logger.Warn().Err(err).Msgf("Invalid request ID %s", requestIDStr)
+		http.Error(w, "Invalid request ID", http.StatusBadRequest)
+	}
+
+	result, err := p.store.requestStore.GetByRequestID(ctx, requestID, requestRequestID)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get logs")
+		http.Error(w, "something went wrong", http.StatusServiceUnavailable)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched logs")
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (p *Proxy) handleGetDBRequest(w http.ResponseWriter, r *http.Request) {
+	ctx, requestID := r.Context(), uuid.New()
+
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token for signup")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted signup", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	query := r.URL.Query()
+
+	pageSizeStr := query.Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10 // default
+	}
+
+	// Extract and parse page
+	pageStr := query.Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 1 // default
+	}
+
+	result, err := p.store.requestStore.GetPaginatedRequest(ctx, requestID, page, pageSize)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get logs")
+		http.Error(w, "something went wrong", http.StatusServiceUnavailable)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched logs")
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
 }

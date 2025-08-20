@@ -87,6 +87,7 @@ func (u UserStore) Update(ctx context.Context, requestID uuid.UUID, payload User
 		Model(&User{}).
 		Where("id = ?", requestID).
 		Updates(payload).Error; err != nil {
+		log.Err(err).Msg("Failed to update user")
 		return err
 	}
 
