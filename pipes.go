@@ -9,15 +9,16 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
-func (p *Proxy) frontend(clientConn, serverConn net.Conn, connID int, role UserRole, wg *sync.WaitGroup) {
+func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role UserRole, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	var (
 		preparedStatement string
 		bindParameters    []string
-		reader            = bufio.NewReader(clientConn)
+		reader            = bufio.NewReader(request.conn)
 		queryString       string
 	)
 
@@ -90,7 +91,7 @@ func (p *Proxy) frontend(clientConn, serverConn net.Conn, connID int, role UserR
 				preparedStatement = strings.Replace(preparedStatement, placeholder, value, 1)
 			}
 
-			fmt.Println("REFINED QUERY", preparedStatement)
+			//fmt.Println("REFINED QUERY", preparedStatement)
 
 			queryString = preparedStatement
 		}
@@ -99,19 +100,27 @@ func (p *Proxy) frontend(clientConn, serverConn net.Conn, connID int, role UserR
 		if len(queryString) > 0 {
 			queryType := p.classifyQuery(queryString)
 
+			request.Sql = queryString
+
 			if queryType == QueryWrite && role == UserRoleReadOnly {
+				p.logger.Info().Msgf("user doesn't have write access for SQL: %s", queryString)
+
+				// write error and quit
 				// quit
 				//STOP
 			}
 		}
-
-		//IF THE LENGTH OF QUERY STRING IS MORE THAN 0 -> INSERT INTO DB AND CONTINUE
 
 		// Forward data to PostgreSQL
 		_, err = serverConn.Write(data)
 		if err != nil {
 			p.logger.Error().Err(err).Msgf("FROM-CLIENT; [Conn %d] Error forwarding to PostgreSQL: %v", connID, err)
 			return
+		}
+
+		if len(request.Sql) > 0 {
+			now := time.Now()
+			request.CompletedAt = &now
 		}
 	}
 }

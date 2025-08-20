@@ -9,7 +9,7 @@ import (
 )
 
 type RequestInterface interface {
-	Create(ctx context.Context, requestID uuid.UUID, payload Request) (*uuid.UUID, error)
+	Create(ctx context.Context, requestID uuid.UUID, payload *Request) (*uuid.UUID, error)
 	GetPaginatedRequest(ctx context.Context, requestID uuid.UUID, page int, pageSize int) (PaginatedResult[[]Request], error)
 	GetByRequestID(ctx context.Context, requestID uuid.UUID, requestRequestID uuid.UUID) (*Request, error)
 }
@@ -46,7 +46,7 @@ func (r RequestStore) GetByRequestID(ctx context.Context, requestID uuid.UUID, r
 	return &request, nil
 }
 
-func (r RequestStore) Create(ctx context.Context, requestID uuid.UUID, payload Request) (*uuid.UUID, error) {
+func (r RequestStore) Create(ctx context.Context, requestID uuid.UUID, payload *Request) (*uuid.UUID, error) {
 	log := r.logger.With().
 		Str(MethodStrHelper, "request.Create").
 		Str(RequestID, requestID.String()).

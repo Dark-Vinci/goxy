@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -13,11 +14,13 @@ type Request struct {
 	UserID       uuid.UUID
 	Sql          string
 	CreatedAt    time.Time
-	CompletedAt  time.Time
+	CompletedAt  *time.Time
 	Duration     int
 	ConnectionID uuid.UUID
 	conn         net.Conn
 	connID       uint64
+	ctx          context.Context
+	requestID    uuid.UUID
 }
 
 func (r Request) String() string {

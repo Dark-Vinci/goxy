@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -21,6 +22,14 @@ func (p *Proxy) handleConnection(request *Request) {
 	}(request.conn)
 
 	// defer insertion into Request
+	defer func() {
+		go func() {
+			_, err := p.store.requestStore.Create(context.Background(), request.requestID, request)
+			if err != nil {
+				p.logger.Error().Err(err).Msgf("Failed to insert request into database: %v", err)
+			}
+		}()
+	}()
 
 	// read startup message
 	rawMessage, _ := readStartupMessage(request.conn)
@@ -35,7 +44,7 @@ func (p *Proxy) handleConnection(request *Request) {
 
 	token, _ := params[TokenKey]
 
-	_, role, err := p.validateJWT(token)
+	_, role, err := p.validateJWT(request.ctx, request.requestID, token)
 	if err != nil {
 		_ = writeError(request.conn, "42883", "invalid_authorization_specification", "token is invalid")
 		return
@@ -81,7 +90,7 @@ func (p *Proxy) handleConnection(request *Request) {
 	wg.Add(2)
 
 	// Client -> PROXY
-	go p.frontend(request.conn, conn, int(request.connID), role, &wg)
+	go p.frontend(conn, request, int(request.connID), role, &wg)
 
 	// PROXY -> Client
 	go p.backend(conn, request.conn, int(request.connID), &wg)
