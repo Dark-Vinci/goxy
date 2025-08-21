@@ -17,7 +17,7 @@ import (
 	"thesis/store"
 )
 
-// Proxy represents the PostgreSQL proxy
+// Proxy represents the PostgresSQL proxy
 type Proxy struct {
 	writePatterns []*regexp.Regexp
 	readPatterns  []*regexp.Regexp

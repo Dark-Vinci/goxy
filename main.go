@@ -40,14 +40,14 @@ func main() {
 		}
 	}()
 
-	// Start HTTP server in a goroutine
+	// Start an HTTP server in a goroutine
 	go func() {
 		if err = proxy.HTTPServer(); err != nil {
 			dbLogger.Fatal().Err(err).Msg("Failed to start HTTP server")
 		}
 	}()
 
-	// Start proxy server
+	// Start a proxy server
 	if err = proxy.Start(); err != nil {
 		dbLogger.Fatal().Err(err).Msg("Failed to start proxy server")
 	}

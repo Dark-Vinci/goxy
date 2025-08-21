@@ -55,7 +55,7 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 			upstream.lock.Lock()
 			healthy, lag, start := false, 0, time.Now()
 
-			// Send ping request
+			// Send a ping request
 			//if prevHealthy {
 			if err := checkUpstream(upstream); err != nil {
 				p.logger.Warn().Err(err).Msgf(

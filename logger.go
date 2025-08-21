@@ -9,7 +9,7 @@ import (
 )
 
 func setupLogger(db *sql.DB) zerolog.Logger {
-	// Configure console writer
+	// Configure a console writer
 	consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02 15:04:05"}
 
 	// Configure SQLite writer

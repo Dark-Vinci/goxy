@@ -16,19 +16,19 @@ func dbInit(db *sql.DB, logger zerolog.Logger, config *Config) error {
 		logger.Fatal().Err(err).Msg("Failed to create health check table")
 	}
 
-	// Create users table
+	// Create a users' table
 	_, err = db.Exec(createUserTable)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create users table")
 	}
 
-	// Create log entry table
+	// Create a log entry table
 	_, err = db.Exec(createLogEntryTable)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create db logger table")
 	}
 
-	// Create request table
+	// Create a request table
 	_, err = db.Exec(createRequestTable)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create request table")

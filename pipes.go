@@ -29,7 +29,7 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 	}()
 
 	for {
-		// Read data from client
+		// Read data from a client
 		data := make([]byte, 16384)
 		var sql SQL
 		n, err := reader.Read(data)
@@ -121,7 +121,7 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 			}
 		}
 
-		// Forward data to PostgreSQL
+		// Forward data to PostgresSQL
 		_, err = serverConn.Write(data)
 		if err != nil {
 			p.logger.Error().Err(err).Msgf("FROM-CLIENT; [Conn %d] Error forwarding to PostgreSQL: %v", connID, err)

@@ -75,7 +75,7 @@ func parseParameterStatus(data []byte) [2]string {
 	return [2]string{string(parts[0]), string(parts[1])}
 }
 
-// parseBindParameters parses a PostgreSQL Bind message into a slice of parameter strings.
+// parseBindParameters parses a PostgresSQL Bind message into a slice of parameter strings.
 func parseBindParameters(data []byte) ([]string, string, error) {
 	if len(data) < 6 || data[0] != 'B' {
 		return nil, "", fmt.Errorf("not a Bind message")
@@ -102,7 +102,7 @@ func parseBindParameters(data []byte) ([]string, string, error) {
 	stmtName := string(data[pos : pos+end])
 	pos += end + 1
 
-	// read number of format codes
+	// read a number of format codes
 	if pos+2 > len(data) {
 		return nil, stmtName, fmt.Errorf("truncated bind message (format count)")
 	}
@@ -145,7 +145,7 @@ func parseBindParameters(data []byte) ([]string, string, error) {
 	return params, stmtName, nil
 }
 
-// parseDescribeMessage extracts portal or statement name from Describe message
+// parseDescribeMessage extracts portal or statement name from a Describe message
 func parseDescribeMessage(data []byte) string {
 	if len(data) < 6 {
 		return "unknown"
