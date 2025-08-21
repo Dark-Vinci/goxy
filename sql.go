@@ -1,35 +1,54 @@
 package main
 
-const createUpstreamsSQL = `
-	CREATE TABLE IF NOT EXISTS upstreams (
-		addr TEXT PRIMARY KEY,
-		role TEXT,
-		healthy BOOLEAN,
-		lag INTEGER
-	)`
+const createLogEntryTable = `
+CREATE TABLE IF NOT EXISTS log_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    level TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    caller TEXT,
+    message TEXT,
+    fields TEXT  -- JSON string, since SQLite doesn’t have a native map type
+);`
 
-const createUsersSQL = `
-	CREATE TABLE IF NOT EXISTS users (
-		username TEXT PRIMARY KEY,
-		password TEXT,
-		role TEXT
-	)`
+const createHealthChecks = `
+CREATE TABLE IF NOT EXISTS health_checks (
+	id TEXT PRIMARY KEY,
+	addr TEXT NOT NULL,
+	healthy INTEGER NOT NULL,
+	lag INTEGER NOT NULL,
+	state_change INTEGER NOT NULL,
+	created_at DATETIME NOT NULL
+);`
 
-const createSQLLog = `
-    CREATE TABLE IF NOT EXISTS logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        level TEXT,
-        timestamp INTEGER,
-        caller TEXT,
-        message TEXT,
-        fields TEXT
-    );`
+const createUserTable = `
+CREATE TABLE IF NOT EXISTS users (
+	id TEXT PRIMARY KEY,
+	username TEXT NOT NULL UNIQUE,
+	password TEXT NOT NULL,
+	is_admin INTEGER NOT NULL,
+	role TEXT,
+	created_at DATETIME NOT NULL,
+	updated_at DATETIME NOT NULL,
+	deleted_at DATETIME
+);`
 
-const createUpstreamHealth = `CREATE TABLE IF NOT EXISTS upstream_cron (
-    id TEXT NOT NULL PRIMARY KEY,
-    healthy INTEGER NOT NULL,        -- store bool as 0/1
-    lag INTEGER,                     -- assuming lag is an int
-    address TEXT NOT NULL,
-    state_change INTEGER NOT NULL,   -- also 0/1
-    nth INTEGER                     -- your p.nthCheck value
+const createRequestTable = `
+CREATE TABLE IF NOT EXISTS requests (
+	id TEXT PRIMARY KEY,
+	user_id TEXT,
+	sql TEXT,
+	created_at DATETIME NOT NULL,
+	completed_at DATETIME,
+	conn_id INTEGER,
+	server_addr TEXT
+);`
+
+const createSQLTable = `
+CREATE TABLE IF NOT EXISTS sqls (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    sql TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    completed_at DATETIME,
+    is_read BOOLEAN NOT NULL DEFAULT 0
 );`

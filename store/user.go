@@ -122,7 +122,7 @@ func (u UserStore) GetByUsername(ctx context.Context, requestID uuid.UUID, usern
 
 	var user User
 
-	if err := u.db.WithContext(ctx).Where("email = ?", username).First(&user).Error; err != nil {
+	if err := u.db.WithContext(ctx).Where("username = ?", username).First(&user).Error; err != nil {
 		log.Err(err).Msg("Failed to get user by username")
 		return nil, err
 	}

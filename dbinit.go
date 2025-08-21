@@ -2,52 +2,64 @@ package main
 
 import (
 	"database/sql"
-	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func dbInit(db *sql.DB, logger zerolog.Logger, config *Config) error {
-	// Create upstreams table
-	_, err := db.Exec(createUpstreamsSQL)
+	// Create a health check table
+	_, err := db.Exec(createHealthChecks)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to create upstreams table")
+		logger.Fatal().Err(err).Msg("Failed to create health check table")
 	}
 
 	// Create users table
-	_, err = db.Exec(createUsersSQL)
+	_, err = db.Exec(createUserTable)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create users table")
 	}
 
-	// Create users table
-	_, err = db.Exec(createSQLLog)
+	// Create log entry table
+	_, err = db.Exec(createLogEntryTable)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Failed to create db logger table")
 	}
 
-	// Create users table
-	_, err = db.Exec(createUpstreamHealth)
+	// Create request table
+	_, err = db.Exec(createRequestTable)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to create db logger table")
+		logger.Fatal().Err(err).Msg("Failed to create request table")
+	}
+
+	_, err = db.Exec(createSQLTable)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("Failed to create SQL table")
 	}
 
 	// Insert sample users
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(config.adminPassword), bcrypt.DefaultCost)
 
-	if _, err = db.Exec("INSERT OR REPLACE INTO users (username, password, role) VALUES (?, ?, ?)",
-		config.adminUser, hashedPassword, UserRoleAdmin); err != nil {
+	userID := uuid.New().String()
+	now := time.Now()
+
+	if _, err = db.Exec(
+		`INSERT OR REPLACE INTO users 
+	(id, username, password, is_admin, role, created_at, updated_at, deleted_at) 
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		userID,
+		config.adminUser,
+		hashedPassword,
+		1, // is_admin = true
+		UserRoleAdmin,
+		now, // created_at
+		now, // updated_at
+		nil, // deleted_at
+	); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to insert admin user")
 		return err
-	}
-
-	for _, slave := range config.servers {
-		_, err = db.Exec("INSERT OR REPLACE INTO upstreams (addr, role, healthy, lag) VALUES (?, ?, ?, ?)",
-			strings.ReplaceAll(slave, ":", "_"), RoleReplica, false, 0)
-		if err != nil {
-			logger.Fatal().Err(err).Msgf("Failed to insert replica %s", slave)
-		}
 	}
 
 	return nil

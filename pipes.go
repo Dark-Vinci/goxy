@@ -19,12 +19,19 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 		preparedStatement string
 		bindParameters    []string
 		reader            = bufio.NewReader(request.conn)
-		queryString       string
+		sqls              = make([]SQL, 0)
 	)
+
+	defer func() {
+		request.Sql = sqls
+		now := time.Now()
+		request.CompletedAt = &now
+	}()
 
 	for {
 		// Read data from client
 		data := make([]byte, 16384)
+		var sql SQL
 		n, err := reader.Read(data)
 		if err != nil {
 			if err != io.EOF {
@@ -43,7 +50,7 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 			query := string(bytes.Trim(data[5:], "\x00"))
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Query: %s", connID, query)
 
-			queryString = query
+			sql.Sql = query
 		} else if data[0] == 'P' && n > 5 {
 			idx := bytes.IndexByte(data[5:], 0) + 5
 			if idx < n-1 {
@@ -91,19 +98,22 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 				preparedStatement = strings.Replace(preparedStatement, placeholder, value, 1)
 			}
 
-			//fmt.Println("REFINED QUERY", preparedStatement)
+			sql.Sql = preparedStatement
 
-			queryString = preparedStatement
+			bindParameters = nil
+			preparedStatement = ""
 		}
 
 		// IF THE LENGTH OF QUERY STRING IS MORE THAN 0 -> INSERT INTO DB AND CONTINUE
-		if len(queryString) > 0 {
-			queryType := p.classifyQuery(queryString)
+		if len(sql.Sql) > 1 {
+			queryType := p.classifyQuery(sql.Sql)
 
-			request.Sql = queryString
+			sql.IsRead = queryType == QueryRead
 
 			if queryType == QueryWrite && role == UserRoleReadOnly {
-				p.logger.Info().Msgf("user doesn't have write access for SQL: %s", queryString)
+				p.logger.Info().Msgf("user doesn't have write access for SQL: %s", sql.Sql)
+
+				//sql.
 
 				// write error and quit
 				// quit
@@ -118,9 +128,11 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 			return
 		}
 
-		if len(request.Sql) > 0 {
-			now := time.Now()
-			request.CompletedAt = &now
+		now := time.Now()
+		sql.CompletedAt = &now
+
+		if len(sql.Sql) > 1 {
+			sqls = append(sqls, sql)
 		}
 	}
 }

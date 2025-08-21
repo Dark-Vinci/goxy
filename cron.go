@@ -70,14 +70,14 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 
 			// insert database
 			_, err := p.sqliteDB.Exec(
-				`INSERT INTO upstream_cron(id, healthy, lag, address, state_change, nth)
+				`INSERT INTO health_checks(id, healthy, lag, addr, state_change, created_at)
 				 VALUES (?, ?, ?, ?, ?, ?)`,
 				uuid.New(),
 				boolToInt(healthy), // store as 1/0
 				lag,
 				upstream.Addr,
 				boolToInt(prevHealthy != healthy), // state change = true if changed
-				p.nthCheck,
+				time.Now(),
 			)
 
 			if err != nil {
@@ -99,6 +99,7 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 			// HEALTH STATUS HAS CHANGED
 			if prevHealthy != healthy {
 				p.lock.Lock()
+
 				if healthy {
 					// move from unhealthy → healthy
 					for i, v := range p.unhealthy {
@@ -121,6 +122,7 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 
 					p.unhealthy = append(p.unhealthy, upstream)
 				}
+
 				p.lock.Unlock()
 			}
 		}

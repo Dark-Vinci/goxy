@@ -40,6 +40,7 @@ type Proxy struct {
 		userStore        store.UserInterface
 		requestStore     store.RequestInterface
 		logsStore        store.LogsInterface
+		sqlStore         store.SQLInterface
 	}
 }
 
@@ -88,6 +89,7 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 	requestStore := store.NewRequestStore(&logger, gormDB)
 	healthCheckStore := store.NewHealthCheckStore(&logger, gormDB)
 	logsStore := store.NewLogStore(gormDB, &logger)
+	sqlStore := store.NewSQLStore(gormDB, &logger)
 
 	p := &Proxy{
 		config:       config,
@@ -107,11 +109,13 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 			userStore        store.UserInterface
 			requestStore     store.RequestInterface
 			logsStore        store.LogsInterface
+			sqlStore         store.SQLInterface
 		}{
 			healthCheckStore: healthCheckStore,
 			userStore:        userStore,
 			requestStore:     requestStore,
 			logsStore:        logsStore,
+			sqlStore:         sqlStore,
 		},
 	}
 

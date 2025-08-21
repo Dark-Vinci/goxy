@@ -1,9 +1,8 @@
 package main
 
 import (
-	"sync"
-
 	"github.com/google/uuid"
+	"sync"
 )
 
 type Upstream struct {

@@ -29,6 +29,10 @@ func (p *Proxy) HTTPServer() error {
 	r.HandleFunc("/request", p.handleGetDBRequest).Methods("GET")
 	r.HandleFunc("/request/{id}", p.handleGetDBRequestByID).Methods("GET")
 
+	// SQL
+	r.HandleFunc("/sql", p.handleFetchSQL).Methods("GET")
+	r.HandleFunc("/sql/{request_id}", p.handleFetchRequestSQL).Methods("GET")
+
 	p.logger.Info().Msgf("HTTP server listening on %s", p.config.HTTPListen)
 
 	return http.ListenAndServe(p.config.HTTPListen, r)

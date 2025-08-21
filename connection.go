@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"net"
 	"sync"
 )
@@ -24,9 +22,12 @@ func (p *Proxy) handleConnection(request *Request) {
 	// defer insertion into Request
 	defer func() {
 		go func() {
-			_, err := p.store.requestStore.Create(context.Background(), request.requestID, request)
-			if err != nil {
+			if err := p.InsertRequest(*request); err != nil {
 				p.logger.Error().Err(err).Msgf("Failed to insert request into database: %v", err)
+			}
+
+			if err := p.InsertSQLS(*request); err != nil {
+				p.logger.Error().Err(err).Msgf("Failed to insert sqls into database: %v", err)
 			}
 		}()
 	}()
@@ -53,8 +54,6 @@ func (p *Proxy) handleConnection(request *Request) {
 	// delete/modify token from params
 	delete(params, "token")
 
-	fmt.Println("GOR HERE")
-
 	//build startup message
 	newMessage := buildStartupMessage(params, protocol)
 
@@ -78,6 +77,9 @@ func (p *Proxy) handleConnection(request *Request) {
 		_ = writeError(request.conn, "", "", "something went wrong2")
 		return
 	}
+
+	// set the server address in the request
+	request.serverAddr = &upstream.Addr
 
 	// Send startup message to PostgreSQL
 	_, err = conn.Write(newMessage)
