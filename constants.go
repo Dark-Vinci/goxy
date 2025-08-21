@@ -10,10 +10,11 @@ const (
 
 type UpstreamRole int
 
-const (
-	RolePrimary UpstreamRole = iota
-	RoleReplica
-)
+//
+//const (
+//	RolePrimary UpstreamRole = iota
+//	RoleReplica
+//)
 
 // UserRole defines user roles for RBAC
 type UserRole string
@@ -25,11 +26,3 @@ const (
 )
 
 const TokenKey = "token"
-
-//
-//var writePrefixes = []string{
-//	"INSERT", "UPDATE", "DELETE", "MERGE", "CREATE", "ALTER", "DROP", "TRUNCATE",
-//	"GRANT", "REVOKE", "VACUUM", "ANALYZE", "REINDEX", "REFRESH", "CALL",
-//	"COPY ", // COPY table FROM … writes; COPY … TO is read-ish but keep simple
-//	"LOCK", "CLUSTER", "DISCARD", "SECURITY LABEL",
-//}

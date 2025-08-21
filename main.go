@@ -35,14 +35,14 @@ func main() {
 	}
 
 	defer func() {
-		if err := proxy.Close(); err != nil {
+		if err = proxy.Close(); err != nil {
 			dbLogger.Error().Err(err).Msg("Failed to close proxy")
 		}
 	}()
 
 	// Start HTTP server in a goroutine
 	go func() {
-		if err := proxy.HTTPServer(); err != nil {
+		if err = proxy.HTTPServer(); err != nil {
 			dbLogger.Fatal().Err(err).Msg("Failed to start HTTP server")
 		}
 	}()

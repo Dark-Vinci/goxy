@@ -453,6 +453,7 @@ func (p *Proxy) handleGetLogs(w http.ResponseWriter, r *http.Request) {
 
 	p.logger.Info().Msgf("successfuly fetched logs")
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(result)
 }
@@ -482,7 +483,22 @@ func (p *Proxy) handleGetLogsByRequestID(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid request ID", http.StatusBadRequest)
 	}
 
-	result, err := p.store.logsStore.GetRequestIDLogs(ctx, requestID, requestRequestID)
+	query := r.URL.Query()
+
+	pageSizeStr := query.Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10 // default
+	}
+
+	// Extract and parse page
+	pageStr := query.Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 1 // default
+	}
+
+	result, err := p.store.logsStore.GetRequestIDLogs(ctx, requestID, requestRequestID, page, pageSize)
 	if err != nil {
 		p.logger.Error().Err(err).Msg("Failed to get logs")
 		http.Error(w, "something went wrong", http.StatusServiceUnavailable)
@@ -491,6 +507,7 @@ func (p *Proxy) handleGetLogsByRequestID(w http.ResponseWriter, r *http.Request)
 
 	p.logger.Info().Msgf("successfuly fetched logs")
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(result)
 }
@@ -527,6 +544,7 @@ func (p *Proxy) handleGetDBRequestByID(w http.ResponseWriter, r *http.Request) {
 
 	p.logger.Info().Msgf("successfuly fetched logs")
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(result)
 }
@@ -571,6 +589,96 @@ func (p *Proxy) handleGetDBRequest(w http.ResponseWriter, r *http.Request) {
 
 	p.logger.Info().Msgf("successfuly fetched logs")
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (p *Proxy) handleFetchRequestSQL(w http.ResponseWriter, r *http.Request) {
+	ctx, requestID := r.Context(), uuid.New()
+
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	requestRequestIDStr := mux.Vars(r)["request_id"]
+
+	requestRequestID, err := uuid.Parse(requestRequestIDStr)
+	if err != nil {
+		p.logger.Warn().Err(err).Msgf("Invalid request ID %s", requestRequestIDStr)
+		http.Error(w, "Invalid request ID", http.StatusBadRequest)
+	}
+
+	result, err := p.store.sqlStore.GetRequestSQL(ctx, requestID, requestRequestID)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get sqls")
+		http.Error(w, "something went wrong", http.StatusServiceUnavailable)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched sqls")
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (p *Proxy) handleFetchSQL(w http.ResponseWriter, r *http.Request) {
+	ctx, requestID := r.Context(), uuid.New()
+
+	username, role, err := p.validateJWTFromHeader(ctx, requestID, r)
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("Invalid or missing token")
+		http.Error(w, "Invalid or missing token", http.StatusUnauthorized)
+		return
+	}
+
+	if role != UserRoleAdmin {
+		p.logger.Warn().Msgf("User %s with role %s attempted", username, role)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	query := r.URL.Query()
+
+	pageSizeStr := query.Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10 // default
+	}
+
+	// Extract and parse page
+	pageStr := query.Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 1 // default
+	}
+
+	// Extract and parse page
+	isReadStr := query.Get("is_read")
+	isRead := false
+	if isReadStr == "true" {
+		isRead = true
+	}
+
+	result, err := p.store.sqlStore.GetPaginatedSQL(ctx, requestID, page, pageSize, &isRead)
+	if err != nil {
+		p.logger.Error().Err(err).Msg("Failed to get sqls")
+		http.Error(w, "something went wrong", http.StatusServiceUnavailable)
+		return
+	}
+
+	p.logger.Info().Msgf("successfuly fetched sqls")
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(result)
 }

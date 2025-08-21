@@ -33,13 +33,13 @@ type Proxy struct {
 	servers       []*Upstream
 	unhealthy     []*Upstream
 	serverIndex   uint64
-	nthCheck      int
 
 	store struct {
 		healthCheckStore store.HealthCheckInterface
 		userStore        store.UserInterface
 		requestStore     store.RequestInterface
 		logsStore        store.LogsInterface
+		sqlStore         store.SQLInterface
 	}
 }
 
@@ -88,6 +88,7 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 	requestStore := store.NewRequestStore(&logger, gormDB)
 	healthCheckStore := store.NewHealthCheckStore(&logger, gormDB)
 	logsStore := store.NewLogStore(gormDB, &logger)
+	sqlStore := store.NewSQLStore(gormDB, &logger)
 
 	p := &Proxy{
 		config:       config,
@@ -99,7 +100,6 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 		serverIndex:  uint64(0),
 		unhealthy:    unhealthy,
 		lock:         sync.Mutex{},
-		nthCheck:     0,
 		pingInterval: time.Duration(config.pingInterval) * time.Second,
 
 		store: struct {
@@ -107,11 +107,13 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 			userStore        store.UserInterface
 			requestStore     store.RequestInterface
 			logsStore        store.LogsInterface
+			sqlStore         store.SQLInterface
 		}{
 			healthCheckStore: healthCheckStore,
 			userStore:        userStore,
 			requestStore:     requestStore,
 			logsStore:        logsStore,
+			sqlStore:         sqlStore,
 		},
 	}
 

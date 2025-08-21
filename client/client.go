@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Connection string to connect to the proxy
-	connStr := "host=localhost port=5435 user=appuser password=apppass dbname=appdb token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTU2OTI4MzQsInJvbGUiOiJyZWFkX29ubHkiLCJ1c2VybmFtZSI6Im1lbG9uMSJ9.dK6NQsvP0ilfm_a1YkoxBEUQ5Duee2EJ2NFEpNR8Cr0 sslmode=disable"
+	connStr := "host=localhost port=5435 user=appuser password=apppass dbname=appdb token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTU4NzE4MDIsInJvbGUiOiJhZG1pbiIsInVzZXJuYW1lIjoibWVsb24ifQ.bqOod35kR4wssBq0UylZKvlRkglOazQL1GkIasyUtAY sslmode=disable"
 
 	// Open a connection to the proxy
 	db, err := sql.Open("postgres", connStr)

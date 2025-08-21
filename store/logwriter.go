@@ -62,7 +62,7 @@ func (l *SqlWriter) Write(p []byte) (n int, err error) {
 	}
 
 	// Insert log into SQLite
-	query := `INSERT INTO logs (level, timestamp, caller, message, fields) VALUES (?, ?, ?, ?, ?)`
+	query := `INSERT INTO log_entries (level, timestamp, caller, message, fields) VALUES (?, ?, ?, ?, ?)`
 	_, err = l.db.Exec(query, level, timestamp, formattedCaller, message, extraFields)
 	if err != nil {
 		fmt.Println("Error inserting log into DB:", err)

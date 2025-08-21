@@ -2,8 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"github.com/rs/zerolog"
 	"os"
+
+	"github.com/rs/zerolog"
 	"thesis/store"
 )
 

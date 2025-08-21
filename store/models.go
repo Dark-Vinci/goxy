@@ -26,22 +26,30 @@ type User struct {
 }
 
 type Request struct {
-	ID           uuid.UUID  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
-	UserID       *uuid.UUID `gorm:"not null" json:"user_id"`
-	Sql          string     `gorm:"not null" json:"sql"`
-	CreatedAt    time.Time  `gorm:"not null" json:"created_at"`
-	CompletedAt  time.Time  `gorm:"not null" json:"completed_at"`
-	Duration     int        `gorm:"not null" json:"duration"`
-	ConnectionID uuid.UUID  `gorm:"not null" json:"connection_id"`
+	ID          uuid.UUID  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
+	UserID      uuid.UUID  `gorm:"not null" json:"user_id"`
+	CreatedAt   time.Time  `gorm:"not null" json:"created_at"`
+	CompletedAt *time.Time `json:"completed_at"`
+	ConnID      uint64
+	ServerAddr  *string `gorm:"not null" json:"server_addr"`
+}
+
+type SQL struct {
+	ID          uuid.UUID  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
+	RequestID   uuid.UUID  `gorm:"not null" json:"request_id"`
+	Sql         string     `gorm:"not null" json:"sql"`
+	CreatedAt   time.Time  `gorm:"not null" json:"created_at"`
+	CompletedAt *time.Time `json:"completed_at"`
+	IsRead      bool
 }
 
 type LogEntry struct {
-	ID        int64                  `json:"id"`
+	ID        int64                  `gorm:"primaryKey;type:integer" json:"id"`
 	Level     string                 `json:"level"`
 	Timestamp int64                  `json:"timestamp"`
 	Caller    string                 `json:"caller"`
 	Message   string                 `json:"message"`
-	Fields    map[string]interface{} `json:"fields"`
+	Fields    map[string]interface{} `gorm:"type:json" json:"fields" json:"fields"`
 }
 
 // PaginatedResult holds the paginated query results
