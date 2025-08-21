@@ -483,7 +483,22 @@ func (p *Proxy) handleGetLogsByRequestID(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid request ID", http.StatusBadRequest)
 	}
 
-	result, err := p.store.logsStore.GetRequestIDLogs(ctx, requestID, requestRequestID)
+	query := r.URL.Query()
+
+	pageSizeStr := query.Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		pageSize = 10 // default
+	}
+
+	// Extract and parse page
+	pageStr := query.Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page <= 0 {
+		page = 1 // default
+	}
+
+	result, err := p.store.logsStore.GetRequestIDLogs(ctx, requestID, requestRequestID, page, pageSize)
 	if err != nil {
 		p.logger.Error().Err(err).Msg("Failed to get logs")
 		http.Error(w, "something went wrong", http.StatusServiceUnavailable)

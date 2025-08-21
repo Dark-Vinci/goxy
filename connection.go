@@ -6,11 +6,11 @@ import (
 )
 
 // defer closing client connection
-// peek the type of request it is [SELECT,...]
+// peek the type of request it is [SELECT, ...]
 // select an appropriate backend server
 // lock to prevent concurrent access to the same backend
 // get the locked connection instance
-// defer unlocking the connection
+// defers unlocking the connection
 // perform other actions with the postgres connection
 func (p *Proxy) handleConnection(request *Request) {
 	defer func(clientConn net.Conn) {
@@ -19,7 +19,7 @@ func (p *Proxy) handleConnection(request *Request) {
 		}
 	}(request.conn)
 
-	// defer insertion into Request
+	// defer insertion into Request, generated SQLS
 	defer func() {
 		go func() {
 			if err := p.InsertRequest(*request); err != nil {
@@ -32,7 +32,7 @@ func (p *Proxy) handleConnection(request *Request) {
 		}()
 	}()
 
-	// read startup message
+	// read a startup message
 	rawMessage, _ := readStartupMessage(request.conn)
 
 	//parse the startup message
@@ -54,7 +54,7 @@ func (p *Proxy) handleConnection(request *Request) {
 	// delete/modify token from params
 	delete(params, "token")
 
-	//build startup message
+	//build a startup message
 	newMessage := buildStartupMessage(params, protocol)
 
 	if len(p.servers) == 0 {
@@ -62,7 +62,7 @@ func (p *Proxy) handleConnection(request *Request) {
 		return
 	}
 
-	// Connect to selected PostgreSQL backend
+	// Connect to the selected PostgresSQL backend
 	upstream := p.getNextServer()
 	if upstream == nil {
 		_ = writeError(request.conn, "", "", "something went wrong1")
@@ -81,7 +81,7 @@ func (p *Proxy) handleConnection(request *Request) {
 	// set the server address in the request
 	request.serverAddr = &upstream.Addr
 
-	// Send startup message to PostgreSQL
+	// Send a startup message to PostgresSQL
 	_, err = conn.Write(newMessage)
 	if err != nil {
 		_ = writeError(request.conn, "", "", "something went wrong2")

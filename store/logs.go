@@ -10,7 +10,7 @@ import (
 
 type LogsInterface interface {
 	GetPaginatedLogs(ctx context.Context, requestID uuid.UUID, page, pageSize int, levelFilter string) (PaginatedResult[[]LogEntry], error)
-	GetRequestIDLogs(ctx context.Context, requestID uuid.UUID, requestRequestID uuid.UUID) (PaginatedResult[[]LogEntry], error)
+	GetRequestIDLogs(ctx context.Context, requestID uuid.UUID, requestRequestID uuid.UUID, page, pageSize int) (PaginatedResult[[]LogEntry], error)
 }
 
 type LogStore struct {
@@ -24,12 +24,48 @@ func NewLogStore(db *gorm.DB, log *zerolog.Logger) LogsInterface {
 		log: log,
 	}
 }
-func (l *LogStore) GetRequestIDLogs(ctx context.Context, requestID uuid.UUID, requestRequestID uuid.UUID) (PaginatedResult[[]LogEntry], error) {
-	//TODO implement me
-	panic("implement me")
-}
 
 var _ LogsInterface = (*LogStore)(nil)
+
+func (l *LogStore) GetRequestIDLogs(ctx context.Context, requestID uuid.UUID, requestRequestID uuid.UUID, page, pageSize int) (PaginatedResult[[]LogEntry], error) {
+	log := l.log.With().
+		Str(MethodStrHelper, "logs.GetRequestIDLogs").
+		Str(RequestID, requestID.String()).
+		Logger()
+
+	log.Info().Msg("Got a request to get logs by request id")
+
+	offset := (page - 1) * pageSize
+	result := PaginatedResult[[]LogEntry]{
+		Result:   []LogEntry{},
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	var totalCount int64
+	countQuery := l.db.Model(&LogEntry{})
+
+	if err := countQuery.Count(&totalCount).Error; err != nil {
+		return result, err
+	}
+
+	result.TotalCount = totalCount
+
+	// Query logs with pagination
+	query := l.db.Model(&LogEntry{}).
+		WithContext(ctx).
+		Order("timestamp DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Where("request_id = ?", requestRequestID)
+
+	if err := query.Find(&result.Result).Error; err != nil {
+		log.Err(err).Msg("Failed to get paginated logs")
+		return result, err
+	}
+
+	return result, nil
+}
 
 func (l *LogStore) GetPaginatedLogs(ctx context.Context, requestID uuid.UUID, page, pageSize int, levelFilter string) (PaginatedResult[[]LogEntry], error) {
 	log := l.log.With().
@@ -59,7 +95,11 @@ func (l *LogStore) GetPaginatedLogs(ctx context.Context, requestID uuid.UUID, pa
 	result.TotalCount = totalCount
 
 	// Query logs with pagination
-	query := l.db.Model(&LogEntry{}).Order("timestamp DESC").Limit(pageSize).Offset(offset)
+	query := l.db.Model(&LogEntry{}).
+		Order("timestamp DESC").
+		Limit(pageSize).
+		Offset(offset)
+
 	if levelFilter != "" {
 		query = query.Where("level = ?", levelFilter)
 	}

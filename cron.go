@@ -15,8 +15,6 @@ import (
 // spawn goroutines for primary
 // spawn goroutines for each replicas
 func (p *Proxy) healthCheck() {
-	p.nthCheck = 1
-
 	// for healthy servers
 	for _, v := range p.servers {
 		go func(replica *Upstream) {
