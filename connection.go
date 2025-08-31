@@ -13,6 +13,7 @@ import (
 // defers unlocking the connection
 // perform other actions with the postgres connection
 func (p *Proxy) handleConnection(request *Request) {
+	// defer closing client connection
 	defer func(clientConn net.Conn) {
 		if err := clientConn.Close(); err != nil {
 			p.logger.Warn().Err(err).Msgf("Failed to close client connection: %v", err)
@@ -39,15 +40,16 @@ func (p *Proxy) handleConnection(request *Request) {
 	params, protocol := parseTheStartupMessage(rawMessage)
 
 	if _, ok := params[TokenKey]; !ok {
-		_ = writeError(request.conn, "42883", "invalid_authorization_specification", "token is missing")
+		_ = writeError(request.conn, "28000", "FATAL", "token is missing")
 		return
 	}
 
 	token, _ := params[TokenKey]
 
+	// validate the token
 	_, role, err := p.validateJWT(request.ctx, request.requestID, token)
 	if err != nil {
-		_ = writeError(request.conn, "42883", "invalid_authorization_specification", "token is invalid")
+		_ = writeError(request.conn, "28000", "FATAL", "token is invalid")
 		return
 	}
 
@@ -58,26 +60,25 @@ func (p *Proxy) handleConnection(request *Request) {
 	newMessage := buildStartupMessage(params, protocol)
 
 	if len(p.servers) == 0 {
-		_ = writeError(request.conn, "42883", "invalid_authorization_specification", "all servers are down, please try again later")
+		_ = writeError(request.conn, "08006", "FATAL", "all servers are down, please try again later")
 		return
 	}
 
 	// Connect to the selected PostgresSQL backend
 	upstream := p.getNextServer()
 	if upstream == nil {
-		_ = writeError(request.conn, "", "", "something went wrong1")
+		_ = writeError(request.conn, "08004", "FATAL", "no available upstream servers")
 		return
 	}
 
-	upstream.lock.Lock()
-	defer upstream.lock.Unlock()
-
+	// get a connection from the pool
 	conn, err := upstream.pool.Get(request.ctx)
 	if err != nil {
-		_ = writeError(request.conn, "", "", "something went wrong2")
+		_ = writeError(request.conn, "08001", "ERROR", "cannot get backend connection")
 		return
 	}
 
+	// defer releasing the connection to the pool
 	defer upstream.pool.Release(conn)
 
 	// set the server address in the request
@@ -99,6 +100,7 @@ func (p *Proxy) handleConnection(request *Request) {
 	// PROXY -> Client
 	go p.backend(conn, request.conn, int(request.connID), &wg)
 
+	// wait for both goroutines to finish
 	wg.Wait()
 
 	p.logger.Info().Msgf("[Conn %d] Connection closed", request.connID)

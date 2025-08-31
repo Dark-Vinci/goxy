@@ -10,12 +10,6 @@ const (
 
 type UpstreamRole int
 
-//
-//const (
-//	RolePrimary UpstreamRole = iota
-//	RoleReplica
-//)
-
 // UserRole defines user roles for RBAC
 type UserRole string
 

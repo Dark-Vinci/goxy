@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -48,8 +47,6 @@ func ping(up net.Conn) error {
 			log.Printf("Health check failed: read error from: %v", err)
 			return err
 		}
-
-		fmt.Println("HHERRR")
 	}
 
 	return nil

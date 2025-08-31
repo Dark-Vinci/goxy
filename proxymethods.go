@@ -37,20 +37,18 @@ func (p *Proxy) Start() error {
 			continue
 		}
 
-		a, _ := context.WithTimeout(context.Background(), 1*time.Minute)
+		ctx, _ := context.WithTimeout(context.Background(), 1*time.Minute)
 
-		request := &Request{
+		go p.handleConnection(&Request{
 			ID:        uuid.New(),
 			Sql:       nil,
 			CreatedAt: time.Now(),
-			ctx:       a,
+			ctx:       ctx,
 			connID:    atomic.AddUint64(&p.connCounter, 1),
 			requestID: uuid.New(),
 			UserID:    uuid.UUID{},
 			conn:      clientConn,
-		}
-
-		go p.handleConnection(request)
+		})
 	}
 }
 

@@ -96,7 +96,7 @@ func (p *ConnectionPool) Get(ctx context.Context) (net.Conn, error) {
 	// ping or reconnect to the database
 	case conn := <-p.connections:
 		// Check if the connection is still valid
-		if err := ping(conn); err != nil {
+		if err := pingPostgres(conn); err != nil {
 			// Close an invalid connection and create a new one
 			_ = conn.Close()
 
