@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync/atomic"
@@ -36,11 +37,13 @@ func (p *Proxy) Start() error {
 			continue
 		}
 
+		a, _ := context.WithTimeout(context.Background(), 1*time.Minute)
+
 		request := &Request{
 			ID:        uuid.New(),
 			Sql:       nil,
 			CreatedAt: time.Now(),
-			ctx:       nil,
+			ctx:       a,
 			connID:    atomic.AddUint64(&p.connCounter, 1),
 			requestID: uuid.New(),
 			UserID:    uuid.UUID{},
@@ -65,6 +68,11 @@ func (p *Proxy) Close() error {
 	// Return combined errors if any
 	if len(errs) > 0 {
 		return fmt.Errorf("errors during shutdown: %v", errs)
+	}
+
+	// Close all connections
+	for _, v := range p.servers {
+		v.pool.Close()
 	}
 
 	return nil

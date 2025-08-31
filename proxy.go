@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"net"
 	"regexp"
 	"sync"
 	"time"
@@ -48,9 +47,16 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 	servers, unhealthy := make([]*Upstream, 0), make([]*Upstream, 0)
 
 	for _, v := range config.servers {
-		_, err := net.Dial("tcp", v)
+		poolConf := PoolConfig{
+			MaxConnections: config.connectionPoolSize,
+			ConnString:     v,
+			MaxIdleTime:    30 * time.Second,
+			MaxLifetime:    1 * time.Hour,
+		}
+
+		pool, err := NewConnectionPool(poolConf)
 		if err != nil {
-			logger.Fatal().Err(err).Msgf("Failed to connect to replica %v: %v", v, err)
+			logger.Error().Err(err).Msgf("Failed to connect to replica %v: %v", v, err)
 
 			unhealthy = append(unhealthy, &Upstream{
 				Addr:    v,
@@ -58,6 +64,7 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 				Lag:     0,
 				lock:    sync.Mutex{},
 				ID:      uuid.New(),
+				pool:    nil,
 			})
 
 			continue
@@ -69,6 +76,8 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 			Lag:     0,
 			lock:    sync.Mutex{},
 			ID:      uuid.New(),
+			pool:    pool,
+			config:  poolConf,
 		})
 	}
 
@@ -100,7 +109,7 @@ func NewProxy(config *Config, db *sql.DB, logger zerolog.Logger) *Proxy {
 		serverIndex:  uint64(0),
 		unhealthy:    unhealthy,
 		lock:         sync.Mutex{},
-		pingInterval: time.Duration(config.pingInterval) * time.Second,
+		pingInterval: time.Duration(config.pingInterval) * time.Minute,
 
 		store: struct {
 			healthCheckStore store.HealthCheckInterface

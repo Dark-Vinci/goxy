@@ -29,10 +29,12 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 	}()
 
 	for {
+		fmt.Println("HERE")
 		// Read data from a client
 		data := make([]byte, 16384)
 		var sql SQL
 		n, err := reader.Read(data)
+		fmt.Println("HERE1")
 		if err != nil {
 			if err != io.EOF {
 				p.logger.Error().Err(err).Msgf("FROM-CLIENT; [Conn %d] Error reading from client: %v", connID, err)
@@ -44,12 +46,14 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 			continue
 		}
 
+		fmt.Println("HERE2")
+
 		data = data[:n]
 
 		if data[0] == 'Q' && n > 5 { // here
 			query := string(bytes.Trim(data[5:], "\x00"))
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Query: %s", connID, query)
-
+			fmt.Println("HERE3")
 			sql.Sql = query
 		} else if data[0] == 'P' && n > 5 {
 			idx := bytes.IndexByte(data[5:], 0) + 5
@@ -61,6 +65,8 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 			} else {
 				p.logger.Warn().Msgf("FROM-CLIENT; [Conn %d] Client Parse: (malformed, %d bytes)", connID, n)
 			}
+
+			fmt.Println("HERE3")
 		} else if data[0] == 'B' && n > 5 {
 			params, _, err := parseBindParameters(data)
 			if err != nil {
@@ -69,19 +75,29 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 				bindParameters = params
 				p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Bind Parameters: %v", connID, params)
 			}
+
+			fmt.Println("HERE4")
 		} else if data[0] == 'p' {
+			fmt.Println("HERE5")
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Password", connID)
 		} else if data[0] == 'D' && n > 5 {
+			fmt.Println("HERE6")
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Describe %v", connID, parseDescribeMessage(data))
 		} else if data[0] == 'E' && n == 5 {
+			fmt.Println("HERE7")
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Close", connID)
 		} else if data[0] == 'S' && n == 5 {
+			fmt.Println("HERE8")
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Sync", connID)
 		} else if data[0] == 'X' && n == 5 {
+			fmt.Println("HERE9")
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Terminate", connID)
 		} else {
+			fmt.Println("HERE10")
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client -> PostgreSQL: %x", connID, data)
 		}
+
+		fmt.Println("HERE11")
 
 		//TODO; REQUIRES MORE INDEPTH CHECKS
 		if len(bindParameters) > 0 {
@@ -104,6 +120,8 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 			preparedStatement = ""
 		}
 
+		fmt.Println("HERE12")
+
 		// IF THE LENGTH OF QUERY STRING IS MORE THAN 0 -> INSERT INTO DB AND CONTINUE
 		if len(sql.Sql) > 1 {
 			queryType := p.classifyQuery(sql.Sql)
@@ -121,12 +139,16 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 			}
 		}
 
+		fmt.Println("I AM YOUNG CAT")
+
 		// Forward data to PostgresSQL
 		_, err = serverConn.Write(data)
 		if err != nil {
 			p.logger.Error().Err(err).Msgf("FROM-CLIENT; [Conn %d] Error forwarding to PostgreSQL: %v", connID, err)
 			return
 		}
+
+		fmt.Println("I AM YOUNG CAT1111")
 
 		now := time.Now()
 		sql.CompletedAt = &now
@@ -145,6 +167,7 @@ func (p *Proxy) backend(serverConn, clientConn net.Conn, connID int, wg *sync.Wa
 	)
 
 	for {
+		fmt.Println("THERE")
 		// Read message type (1 byte)
 		msgType, err := reader.ReadByte()
 		if err != nil {

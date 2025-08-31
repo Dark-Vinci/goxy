@@ -72,11 +72,13 @@ func (p *Proxy) handleConnection(request *Request) {
 	upstream.lock.Lock()
 	defer upstream.lock.Unlock()
 
-	conn, err := net.Dial("tcp", upstream.Addr)
+	conn, err := upstream.pool.Get(request.ctx)
 	if err != nil {
 		_ = writeError(request.conn, "", "", "something went wrong2")
 		return
 	}
+
+	defer upstream.pool.Release(conn)
 
 	// set the server address in the request
 	request.serverAddr = &upstream.Addr
