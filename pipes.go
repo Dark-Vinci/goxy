@@ -49,7 +49,6 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 		if data[0] == 'Q' && n > 5 { // here
 			query := string(bytes.Trim(data[5:], "\x00"))
 			p.logger.Info().Msgf("FROM-CLIENT; [Conn %d] Client Query: %s", connID, query)
-
 			sql.Sql = query
 		} else if data[0] == 'P' && n > 5 {
 			idx := bytes.IndexByte(data[5:], 0) + 5

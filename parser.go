@@ -133,11 +133,9 @@ func parseBindParameters(data []byte) ([]string, string, error) {
 			}
 			val := string(data[pos : pos+length])
 
-			fmt.Println("RAWWWWW", val)
 			// naive quoting for logging
 			params[i] = "'" + strings.ReplaceAll(val, "'", "''") + "'"
 
-			fmt.Println("UNRAWWWWW", params[i])
 			pos += length
 		}
 	}

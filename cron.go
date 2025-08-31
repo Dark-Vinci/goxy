@@ -107,8 +107,9 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 						}
 					}
 
+					// dangerous: create a new connection pool for each server
+					upstream.pool, _ = NewConnectionPool(upstream.config)
 					p.servers = append(p.servers, upstream)
-
 				} else {
 					// move from healthy → unhealthy
 					for i, v := range p.servers {
@@ -117,6 +118,14 @@ func (p *Proxy) pingUpstream(upstream *Upstream) error {
 							break
 						}
 					}
+
+					// close all connections to this server
+					if upstream.pool != nil {
+						upstream.pool.Close()
+					}
+
+					// set pool to nil
+					upstream.pool = nil
 
 					p.unhealthy = append(p.unhealthy, upstream)
 				}
