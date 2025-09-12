@@ -113,7 +113,8 @@ func (p *Proxy) frontend(serverConn net.Conn, request *Request, connID int, role
 				p.logger.Info().Msgf("user doesn't have write access for SQL: %s", sql.Sql)
 
 				//sql.
-
+				_ = writeError(request.conn, "42883", "invalid_authorization_specification", "Not authorised to take action")
+				return
 				// write error and quit
 				// quit
 				//STOP
